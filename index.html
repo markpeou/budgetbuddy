@@ -179,23 +179,25 @@
           </div>
         </div>
         <div class="income-row mini-card">
-          <div class="income-field-group input-wrap">
-            <input
-              id="salaryAmount"
-              type="text"
-              inputmode="decimal"
-              autocomplete="off"
-              class="cell-input income-input amount-input"
-              placeholder="Salary amount"
-            />
-          </div>
-          <div class="income-field-group input-wrap">
-            <select id="salaryFrequency" class="cell-input income-input">
-              <option value="weekly">Weekly salary</option>
-              <option value="fortnightly">Fortnightly salary</option>
-              <option value="monthly" selected>Monthly salary</option>
-              <option value="annually">Annual salary</option>
-            </select>
+          <div class="income-inputs">
+            <div class="income-field-group input-wrap">
+              <input
+                id="salaryAmount"
+                type="text"
+                inputmode="decimal"
+                autocomplete="off"
+                class="cell-input income-input amount-input"
+                placeholder="Salary amount"
+              />
+            </div>
+            <div class="income-field-group input-wrap">
+              <select id="salaryFrequency" class="cell-input income-input">
+                <option value="weekly">Weekly salary</option>
+                <option value="fortnightly">Fortnightly salary</option>
+                <option value="monthly" selected>Monthly salary</option>
+                <option value="annually">Annual salary</option>
+              </select>
+            </div>
           </div>
           <div class="income-normalised">
             <div class="cell-output">
@@ -228,7 +230,13 @@
         <p class="hint rates-meta" id="ratesMeta">Loading exchange rates…</p>
       </section>
 
-      <section class="card">
+      <section class="card card-expenses">
+        <h2 class="section-heading">
+          <span class="icon-chip icon-chip--teal" aria-hidden="true">
+            <svg class="icon" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><use href="#icon-receipt"/></svg>
+          </span>
+          Expenses
+        </h2>
         <div class="currency-bar mini-card">
           <label class="currency-bar-label" for="expenseCurrencySelect"
             >Expense currency</label
@@ -238,12 +246,9 @@
           </div>
           <span class="hint currency-bar-hint" id="expenseRateHint"></span>
         </div>
-        <h2 class="section-heading">
-          <span class="icon-chip icon-chip--purple" aria-hidden="true">
-            <svg class="icon" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><use href="#icon-home"/></svg>
-          </span>
-          Fixed expenses
-        </h2>
+
+        <div class="expense-group">
+          <h3 class="subsection-heading">Fixed expenses</h3>
         <table class="table table-expense">
           <thead>
             <tr>
@@ -270,15 +275,10 @@
           <svg class="icon icon--sm" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><use href="#icon-plus"/></svg>
           Add fixed expense
         </button>
-      </section>
+        </div>
 
-      <section class="card">
-        <h2 class="section-heading">
-          <span class="icon-chip icon-chip--teal" aria-hidden="true">
-            <svg class="icon" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><use href="#icon-receipt"/></svg>
-          </span>
-          Unfixed / variable expenses
-        </h2>
+        <div class="expense-group">
+          <h3 class="subsection-heading">Unfixed / variable expenses</h3>
         <table class="table table-expense">
           <thead>
             <tr>
@@ -309,15 +309,10 @@
           <svg class="icon icon--sm" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><use href="#icon-plus"/></svg>
           Add variable expense
         </button>
-      </section>
+        </div>
 
-      <section class="card">
-        <h2 class="section-heading">
-          <span class="icon-chip icon-chip--purple" aria-hidden="true">
-            <svg class="icon" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><use href="#icon-repeat"/></svg>
-          </span>
-          Subscriptions &amp; memberships
-        </h2>
+        <div class="expense-group">
+          <h3 class="subsection-heading">Subscriptions &amp; memberships</h3>
         <table class="table table-soft table-expense">
           <thead>
             <tr>
@@ -344,6 +339,7 @@
           <svg class="icon icon--sm" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><use href="#icon-plus"/></svg>
           Add subscription
         </button>
+        </div>
       </section>
 
       <section class="card">

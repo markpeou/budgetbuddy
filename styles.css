@@ -10,7 +10,7 @@
   --color-accent-yellow: #ffc845;
 
   /* Surfaces */
-  --color-bg-page: #f5f5f7;
+  --color-bg-page: #d7d7d7;
   --color-bg-surface: #ffffff;
   --color-bg-inset: #fafafa;
   --color-bg-header: #ffffff;
@@ -151,6 +151,28 @@ body {
   display: flex;
   align-items: center;
   gap: 10px;
+}
+
+.subsection-heading {
+  margin: 0 0 10px;
+  font-size: 16px;
+  font-weight: 600;
+  letter-spacing: -0.01em;
+  color: var(--color-text-primary);
+}
+
+.card-expenses .currency-bar {
+  margin-bottom: 16px;
+}
+
+.expense-group:not(:first-of-type) {
+  margin-top: 24px;
+  padding-top: 24px;
+  border-top: 1px solid var(--border);
+}
+
+.expense-group .btn {
+  margin-top: 10px;
 }
 
 .icon-chip {
@@ -500,13 +522,19 @@ input.cell-input.amount-input {
 
 .income-row {
   display: flex;
-  flex-wrap: wrap;
+  flex-direction: column;
   gap: 10px;
-  align-items: stretch;
+}
+
+.income-inputs {
+  display: flex;
+  flex-wrap: nowrap;
+  gap: 10px;
 }
 
 .income-field-group {
-  flex: 1 1 180px;
+  flex: 1 1 0;
+  min-width: 0;
 }
 
 .income-input {
@@ -517,7 +545,7 @@ input.cell-input.amount-input {
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));
   gap: 6px;
-  flex: 1.4 1 260px;
+  width: 100%;
 }
 
 .table {
@@ -750,10 +778,6 @@ input.cell-input.amount-input {
     padding: 14px 12px 10px;
   }
 
-  .income-row {
-    flex-direction: column;
-  }
-
   .income-normalised {
     grid-template-columns: minmax(0, 1fr);
   }
@@ -815,7 +839,7 @@ input.cell-input.amount-input {
     border-radius: var(--radius-md);
     background: var(--color-bg-inset);
     border: 1px solid var(--border);
-    padding: 10px;
+    padding: 16px 10px;
     margin-bottom: 8px;
   }
 
@@ -857,25 +881,17 @@ input.cell-input.amount-input {
 
   .income-row.mini-card {
     gap: 8px;
-    padding: 10px;
+    padding: 16px 10px;
   }
 
-  .income-row {
-    flex-direction: column;
-  }
-
-  .income-field-group {
-    flex: 1 1 auto;
-  }
-
-  .income-row.mini-card {
+  .income-inputs {
     display: grid;
     grid-template-columns: 1fr 1fr;
     gap: 8px;
   }
 
-  .income-row.mini-card .income-normalised {
-    grid-column: 1 / -1;
+  .income-field-group {
+    flex: 1 1 auto;
   }
 
   .income-normalised {
@@ -884,7 +900,7 @@ input.cell-input.amount-input {
   }
 
   .cell-output {
-    padding: 6px 8px;
+    padding: 16px 8px;
   }
 
   .cell-output strong {
@@ -942,7 +958,7 @@ input.cell-input.amount-input {
       'monthly equiv equiv';
     grid-template-columns: 1fr 1fr auto;
     gap: 6px 8px;
-    padding: 10px;
+    padding: 16px 10px;
     margin-bottom: 8px;
     border: 1px solid var(--border);
     border-radius: var(--radius-md);
