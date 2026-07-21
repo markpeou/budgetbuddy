@@ -10,7 +10,7 @@
       href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700&display=swap"
       rel="stylesheet"
     />
-    <link rel="stylesheet" href="./styles.css" />
+    <link rel="stylesheet" href="./styles.css?v=20260721d" />
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
   </head>
   <body>
@@ -105,7 +105,8 @@
           <h1>Budget Buddy</h1>
         </div>
         <p class="subtitle">
-          Plan your income and expenses with multiple currency options to help with your international move.
+          A warm, clear place to plan income and expenses across currencies —
+          whether you are settling in or still paying bills back home.
         </p>
       </header>
 
@@ -179,24 +180,32 @@
           </div>
         </div>
         <div class="income-row mini-card">
-          <div class="income-inputs">
-            <div class="income-field-group input-wrap">
-              <input
-                id="salaryAmount"
-                type="text"
-                inputmode="decimal"
-                autocomplete="off"
-                class="cell-input income-input amount-input"
-                placeholder="Salary amount"
-              />
+          <div class="income-inputs income-inputs--inline">
+            <div class="income-field-group">
+              <label class="field-label" for="salaryAmount">Amount</label>
+              <div class="money-input-wrap input-wrap">
+                <span class="money-symbol" id="salaryCurrencySymbol" aria-hidden="true">$</span>
+                <input
+                  id="salaryAmount"
+                  type="text"
+                  inputmode="decimal"
+                  autocomplete="off"
+                  class="cell-input income-input amount-input"
+                  placeholder="0"
+                  aria-describedby="incomeHint"
+                />
+              </div>
             </div>
-            <div class="income-field-group input-wrap">
-              <select id="salaryFrequency" class="cell-input income-input">
-                <option value="weekly">Weekly salary</option>
-                <option value="fortnightly">Fortnightly salary</option>
-                <option value="monthly" selected>Monthly salary</option>
-                <option value="annually">Annual salary</option>
-              </select>
+            <div class="income-field-group">
+              <label class="field-label" for="salaryFrequency">Paid</label>
+              <div class="input-wrap">
+                <select id="salaryFrequency" class="cell-input income-input">
+                  <option value="weekly">Weekly</option>
+                  <option value="fortnightly">Fortnightly</option>
+                  <option value="monthly" selected>Monthly</option>
+                  <option value="annually">Yearly</option>
+                </select>
+              </div>
             </div>
           </div>
           <div class="income-normalised">
@@ -225,7 +234,7 @@
           </div>
         </div>
         <p class="hint" id="incomeHint">
-          Enter salary in your selected income currency.
+          Enter your salary amount and how often you are paid.
         </p>
         <p class="hint rates-meta" id="ratesMeta">Loading exchange rates…</p>
       </section>
@@ -239,13 +248,17 @@
         </h2>
         <div class="currency-bar mini-card">
           <label class="currency-bar-label" for="expenseCurrencySelect"
-            >Expense currency</label
+            >Reporting currency</label
           >
           <div class="input-wrap currency-bar-select-wrap">
-            <select id="expenseCurrencySelect" class="cell-input" aria-label="Expense currency"></select>
+            <select id="expenseCurrencySelect" class="cell-input" aria-label="Reporting currency for expense totals"></select>
           </div>
           <span class="hint currency-bar-hint" id="expenseRateHint"></span>
         </div>
+        <p class="hint">
+          Each expense can use its own currency — handy for ongoing bills in another country.
+          Totals convert into your reporting currency.
+        </p>
 
         <div class="expense-group">
           <h3 class="subsection-heading">Fixed expenses</h3>
@@ -254,6 +267,7 @@
             <tr>
               <th class="th-item">Item</th>
               <th class="th-freq">Frequency</th>
+              <th class="th-currency">Currency</th>
               <th class="th-amt">Amount</th>
               <th class="th-monthly" id="fixedMonthlyHead">Monthly</th>
               <th class="th-equiv" id="fixedEquivHead">Equiv.</th>
@@ -263,7 +277,7 @@
           <tbody id="fixedExpensesBody"></tbody>
           <tfoot>
             <tr class="table-footer-card">
-              <td colspan="2" class="align-right" data-label=""><strong>Total fixed expenses</strong></td>
+              <td colspan="3" class="align-right" data-label=""><strong>Total fixed expenses</strong></td>
               <td data-label=""></td>
               <td class="align-right" data-label="Monthly"><strong id="totalFixedMonthly">—</strong></td>
               <td class="align-right dual-col" data-dual-col="equiv" data-label="Equiv."><strong id="totalFixedEquiv">—</strong></td>
@@ -284,6 +298,7 @@
             <tr>
               <th class="th-item">Item</th>
               <th class="th-freq">Frequency</th>
+              <th class="th-currency">Currency</th>
               <th class="th-amt">Amount</th>
               <th class="th-monthly" id="variableMonthlyHead">Monthly</th>
               <th class="th-equiv" id="variableEquivHead">Equiv.</th>
@@ -293,7 +308,7 @@
           <tbody id="variableExpensesBody"></tbody>
           <tfoot>
             <tr class="table-footer-card">
-              <td colspan="2" class="align-right" data-label="">
+              <td colspan="3" class="align-right" data-label="">
                 <strong>Total variable expenses</strong>
               </td>
               <td data-label=""></td>
@@ -318,6 +333,7 @@
             <tr>
               <th class="th-item">Item</th>
               <th class="th-freq">Frequency</th>
+              <th class="th-currency">Currency</th>
               <th class="th-amt">Amount</th>
               <th class="th-monthly" id="subsMonthlyHead">Monthly</th>
               <th class="th-equiv" id="subsEquivHead">Equiv.</th>
@@ -327,7 +343,7 @@
           <tbody id="subscriptionsBody"></tbody>
           <tfoot>
             <tr class="table-footer-card">
-              <td colspan="2" class="align-right" data-label=""><strong>Total subscriptions</strong></td>
+              <td colspan="3" class="align-right" data-label=""><strong>Total subscriptions</strong></td>
               <td data-label=""></td>
               <td class="align-right" data-label="Monthly"><strong id="totalSubsMonthly">—</strong></td>
               <td class="align-right dual-col" data-dual-col="equiv" data-label="Equiv."><strong id="totalSubsEquiv">—</strong></td>
@@ -350,8 +366,8 @@
           Budget split
         </h2>
         <p class="hint">
-          Adjust the percentages to find a structure that suits you. Total
-          should be 100%.
+          Decide how you want to divide your income — expenses, long-term savings,
+          investments, travel, debt payoff, and more. Aim for 100%.
         </p>
         <table class="table table-budget-split">
           <thead>
@@ -361,96 +377,30 @@
               <th class="align-right" id="splitIncomeHead">Monthly</th>
               <th class="align-right th-equiv dual-col" id="splitExpenseHead" data-dual-col="equiv">Equiv.</th>
               <th>Status vs actual</th>
+              <th class="th-actions"></th>
             </tr>
           </thead>
-          <tbody id="budgetSplitBody">
-            <tr data-category="expenses">
-              <td data-label="Category">Expenses</td>
-              <td data-label="Percentage">
-                <input
-                  type="number"
-                  class="percentage-input"
-                  data-percentage-input="expenses"
-                  min="0"
-                  max="100"
-                  value="50"
-                />%
-              </td>
-              <td class="align-right" data-label="Monthly">
-                <strong class="split-amount" data-split-amount="expenses">—</strong>
-              </td>
-              <td class="align-right split-foreign dual-col" data-split-foreign="expenses" data-dual-col="equiv" data-label="Equiv.">—</td>
-              <td class="align-right status-cell" data-status="expenses" data-label="Status"></td>
-            </tr>
-            <tr data-category="savings">
-              <td data-label="Category">Savings</td>
-              <td data-label="Percentage">
-                <input
-                  type="number"
-                  class="percentage-input"
-                  data-percentage-input="savings"
-                  min="0"
-                  max="100"
-                  value="30"
-                />%
-              </td>
-              <td class="align-right" data-label="Monthly">
-                <strong class="split-amount" data-split-amount="savings">—</strong>
-              </td>
-              <td class="align-right split-foreign dual-col" data-split-foreign="savings" data-dual-col="equiv" data-label="Equiv.">—</td>
-              <td class="align-right status-cell" data-status="savings" data-label="Status"></td>
-            </tr>
-            <tr data-category="emergency">
-              <td data-label="Category">Emergency fund</td>
-              <td data-label="Percentage">
-                <input
-                  type="number"
-                  class="percentage-input"
-                  data-percentage-input="emergency"
-                  min="0"
-                  max="100"
-                  value="10"
-                />%
-              </td>
-              <td class="align-right" data-label="Monthly">
-                <strong class="split-amount" data-split-amount="emergency">—</strong>
-              </td>
-              <td class="align-right split-foreign dual-col" data-split-foreign="emergency" data-dual-col="equiv" data-label="Equiv.">—</td>
-              <td class="align-right status-cell" data-status="emergency" data-label="Status"></td>
-            </tr>
-            <tr data-category="investments">
-              <td data-label="Category">Investments</td>
-              <td data-label="Percentage">
-                <input
-                  type="number"
-                  class="percentage-input"
-                  data-percentage-input="investments"
-                  min="0"
-                  max="100"
-                  value="10"
-                />%
-              </td>
-              <td class="align-right" data-label="Monthly">
-                <strong class="split-amount" data-split-amount="investments">—</strong>
-              </td>
-              <td class="align-right split-foreign dual-col" data-split-foreign="investments" data-dual-col="equiv" data-label="Equiv.">—</td>
-              <td class="align-right status-cell" data-status="investments" data-label="Status"></td>
-            </tr>
-          </tbody>
+          <tbody id="budgetSplitBody"></tbody>
           <tfoot>
             <tr class="table-footer-card">
               <td data-label=""><strong>Total</strong></td>
               <td data-label="Percentage">
                 <strong id="totalPercentage">100%</strong>
+                <span class="split-validation hint" id="splitValidationHint"></span>
               </td>
               <td class="align-right" data-label="Monthly">
                 <strong id="totalBudgeted">—</strong>
               </td>
               <td class="align-right dual-col" data-dual-col="equiv" data-label="Equiv."><strong id="totalBudgetedAlt">—</strong></td>
               <td data-label=""></td>
+              <td data-label=""></td>
             </tr>
           </tfoot>
         </table>
+        <button type="button" id="addSplitCategoryBtn" class="btn btn-soft">
+          <svg class="icon icon--sm" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><use href="#icon-plus"/></svg>
+          Add category
+        </button>
       </section>
 
       <section class="card layout-two-column">
@@ -511,7 +461,7 @@
                 <td class="align-right summary-equiv dual-col" data-dual-col="equiv"><strong id="summaryRemainingAlt">—</strong></td>
               </tr>
               <tr>
-                <td>Planned savings + emergency + investments</td>
+                <td>Planned goals (savings &amp; more)</td>
                 <td class="align-right">
                   <strong id="summaryPlannedGoals">—</strong>
                 </td>
@@ -576,7 +526,7 @@
                 <td class="align-right" data-label="Annual"><strong id="bdAllAnnual">—</strong></td>
               </tr>
               <tr>
-                <td>Savings + emergency + investments</td>
+                <td>Goals</td>
                 <td class="align-right" data-label="Daily"><strong id="bdGoalsDaily">—</strong></td>
                 <td class="align-right" data-label="Weekly"><strong id="bdGoalsWeekly">—</strong></td>
                 <td class="align-right" data-label="Monthly"><strong id="bdGoalsMonthly">—</strong></td>
@@ -607,6 +557,7 @@
     </div>
 
     <script src="./icons.js"></script>
-    <script src="./script.js"></script>
+    <script src="./budget-core.js?v=20260721c"></script>
+    <script src="./script.js?v=20260721c"></script>
   </body>
 </html>

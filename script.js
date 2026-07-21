@@ -1,5 +1,9 @@
+/* global Chart, icon, BudgetCore */
+const Core = typeof BudgetCore !== 'undefined' ? BudgetCore : null;
+
 const salaryAmountInput = document.getElementById('salaryAmount');
 const salaryFrequencySelect = document.getElementById('salaryFrequency');
+const salaryCurrencySymbolEl = document.getElementById('salaryCurrencySymbol');
 const incomeCurrencySelect = document.getElementById('incomeCurrencySelect');
 const expenseCurrencySelect = document.getElementById('expenseCurrencySelect');
 const incomeHintEl = document.getElementById('incomeHint');
@@ -57,6 +61,9 @@ const summaryPlannedGoalsAltEl = document.getElementById('summaryPlannedGoalsAlt
 const summaryStatusTextEl = document.getElementById('summaryStatusText');
 
 const totalBudgetedAltEl = document.getElementById('totalBudgetedAlt');
+const splitValidationHintEl = document.getElementById('splitValidationHint');
+const budgetSplitBody = document.getElementById('budgetSplitBody');
+const addSplitCategoryBtn = document.getElementById('addSplitCategoryBtn');
 
 const fixedExpensesBody = document.getElementById('fixedExpensesBody');
 const variableExpensesBody = document.getElementById('variableExpensesBody');
@@ -72,42 +79,10 @@ const totalSubsMonthlyEl = document.getElementById('totalSubsMonthly');
 const totalPercentageEl = document.getElementById('totalPercentage');
 const totalBudgetedEl = document.getElementById('totalBudgeted');
 
-const bdIncomeDailyEl = document.getElementById('bdIncomeDaily');
-const bdIncomeWeeklyEl = document.getElementById('bdIncomeWeekly');
-const bdIncomeMonthlyEl = document.getElementById('bdIncomeMonthly');
-const bdIncomeAnnualEl = document.getElementById('bdIncomeAnnual');
-
-const bdFixedDailyEl = document.getElementById('bdFixedDaily');
-const bdFixedWeeklyEl = document.getElementById('bdFixedWeekly');
-const bdFixedMonthlyEl = document.getElementById('bdFixedMonthly');
-const bdFixedAnnualEl = document.getElementById('bdFixedAnnual');
-
-const bdVariableDailyEl = document.getElementById('bdVariableDaily');
-const bdVariableWeeklyEl = document.getElementById('bdVariableWeekly');
-const bdVariableMonthlyEl = document.getElementById('bdVariableMonthly');
-const bdVariableAnnualEl = document.getElementById('bdVariableAnnual');
-
-const bdSubsDailyEl = document.getElementById('bdSubsDaily');
-const bdSubsWeeklyEl = document.getElementById('bdSubsWeekly');
-const bdSubsMonthlyEl = document.getElementById('bdSubsMonthly');
-const bdSubsAnnualEl = document.getElementById('bdSubsAnnual');
-
-const bdAllDailyEl = document.getElementById('bdAllDaily');
-const bdAllWeeklyEl = document.getElementById('bdAllWeekly');
-const bdAllMonthlyEl = document.getElementById('bdAllMonthly');
-const bdAllAnnualEl = document.getElementById('bdAllAnnual');
-
-const bdGoalsDailyEl = document.getElementById('bdGoalsDaily');
-const bdGoalsWeeklyEl = document.getElementById('bdGoalsWeekly');
-const bdGoalsMonthlyEl = document.getElementById('bdGoalsMonthly');
-const bdGoalsAnnualEl = document.getElementById('bdGoalsAnnual');
-
 const bdNetDailyEl = document.getElementById('bdNetDaily');
 const bdNetWeeklyEl = document.getElementById('bdNetWeekly');
 const bdNetMonthlyEl = document.getElementById('bdNetMonthly');
 const bdNetAnnualEl = document.getElementById('bdNetAnnual');
-
-const percentageInputs = document.querySelectorAll('.percentage-input');
 
 /** Supported input/display currencies (rates fetched with VND as hub). */
 const SUPPORTED_CURRENCIES = [
@@ -129,12 +104,24 @@ let vndRatesCache = null;
 let ratesFetchedAt = null;
 let ratesLoading = false;
 
+/** @type {Array<{id:string,label:string,percent:number,kind:string,required:boolean}>} */
+let currentSplits = Core
+  ? Core.cloneDefaultSplits()
+  : [
+      { id: 'expenses', label: 'Expenses', percent: 50, kind: 'expenses', required: true },
+      { id: 'savings', label: 'Long-term savings', percent: 30, kind: 'goal', required: false },
+      { id: 'emergency', label: 'Emergency fund', percent: 10, kind: 'goal', required: false },
+      { id: 'investments', label: 'Investments', percent: 10, kind: 'goal', required: false },
+    ];
+
 const SCENARIO_STORAGE_KEY = 'budgetPlannerScenarios_v1';
 const INCOME_CURRENCY_STORAGE_KEY = 'budgetPlannerIncomeCurrency_v1';
 const EXPENSE_CURRENCY_STORAGE_KEY = 'budgetPlannerExpenseCurrency_v1';
 
 const DEFAULT_INCOME_CURRENCY = 'USD';
 const DEFAULT_EXPENSE_CURRENCY = 'VND';
+
+const CHART_COLORS = ['#7B14EF', '#00B4A0', '#FFC845', '#C026D3', '#E5E7EB'];
 
 function stripAmountFormatting(value) {
   return String(value).replace(/,/g, '');
@@ -235,11 +222,8 @@ function reformatAllAmountInputs() {
   if (salaryAmountInput && salaryAmountInput.formatAmountValue) {
     salaryAmountInput.formatAmountValue();
   }
-  [fixedExpensesBody, variableExpensesBody, subscriptionsBody].forEach((tbody) => {
-    if (!tbody) return;
-    tbody.querySelectorAll('td:nth-child(3) input.amount-input').forEach((inp) => {
-      if (inp.formatAmountValue) inp.formatAmountValue();
-    });
+  document.querySelectorAll('.expense-row .amount-input').forEach((inp) => {
+    if (inp.formatAmountValue) inp.formatAmountValue();
   });
 }
 
@@ -263,13 +247,18 @@ function getIncomeCurrency() {
   return isSupportedCurrency(code) ? code : DEFAULT_INCOME_CURRENCY;
 }
 
-function getExpenseCurrency() {
+/** Reporting currency for combined expense totals (storage key kept for compat). */
+function getReportingCurrency() {
   const code = expenseCurrencySelect && expenseCurrencySelect.value;
   return isSupportedCurrency(code) ? code : DEFAULT_EXPENSE_CURRENCY;
 }
 
+function getExpenseCurrency() {
+  return getReportingCurrency();
+}
+
 function currenciesDiffer() {
-  return getIncomeCurrency() !== getExpenseCurrency();
+  return getIncomeCurrency() !== getReportingCurrency();
 }
 
 function formatInCurrency(amount, code) {
@@ -287,36 +276,28 @@ function formatInCurrency(amount, code) {
   return `${sign}${meta.symbol}${formatted}`;
 }
 
-function getVndRate(code) {
-  if (code === 'VND') return 1;
-  if (!vndRatesCache) return null;
-  const perVnd = vndRatesCache[code];
-  if (perVnd == null || !Number.isFinite(perVnd) || perVnd <= 0) return null;
-  return perVnd;
-}
-
 function toVnd(amount, code) {
-  if (!Number.isFinite(amount)) return NaN;
-  if (code === 'VND') return amount;
-  const perVnd = getVndRate(code);
-  if (perVnd == null) return NaN;
-  return amount / perVnd;
+  return Core
+    ? Core.toVnd(amount, code, vndRatesCache)
+    : code === 'VND'
+      ? amount
+      : NaN;
 }
 
 function fromVnd(vndAmount, code) {
-  if (!Number.isFinite(vndAmount)) return NaN;
-  if (code === 'VND') return vndAmount;
-  const perVnd = getVndRate(code);
-  if (perVnd == null) return NaN;
-  return vndAmount * perVnd;
+  return Core
+    ? Core.fromVnd(vndAmount, code, vndRatesCache)
+    : code === 'VND'
+      ? vndAmount
+      : NaN;
 }
 
 function convert(amount, fromCode, toCode) {
-  if (!Number.isFinite(amount)) return NaN;
-  if (fromCode === toCode) return amount;
-  const vnd = toVnd(amount, fromCode);
-  if (!Number.isFinite(vnd)) return NaN;
-  return fromVnd(vnd, toCode);
+  return Core
+    ? Core.convert(amount, fromCode, toCode, vndRatesCache)
+    : fromCode === toCode
+      ? amount
+      : NaN;
 }
 
 function formatConvertDisplay(amount, fromCode, toCode) {
@@ -327,27 +308,38 @@ function formatConvertDisplay(amount, fromCode, toCode) {
   return formatInCurrency(converted, toCode);
 }
 
+function frequencyToMonthly(amount, frequency) {
+  return Core
+    ? Core.frequencyToMonthly(amount, frequency)
+    : amount;
+}
+
 function saveCurrencyPreferences() {
   try {
     localStorage.setItem(INCOME_CURRENCY_STORAGE_KEY, getIncomeCurrency());
-    localStorage.setItem(EXPENSE_CURRENCY_STORAGE_KEY, getExpenseCurrency());
+    localStorage.setItem(EXPENSE_CURRENCY_STORAGE_KEY, getReportingCurrency());
   } catch (e) {
     /* ignore */
   }
 }
 
-function populateCurrencySelects() {
-  [incomeCurrencySelect, expenseCurrencySelect].forEach((sel) => {
-    if (!sel) return;
-    sel.innerHTML = '';
-    SUPPORTED_CURRENCIES.forEach((c) => {
-      const opt = document.createElement('option');
-      opt.value = c.code;
-      opt.textContent = `${c.code} — ${c.name}`;
-      sel.appendChild(opt);
-    });
+function populateCurrencySelectOptions(sel, selectedCode, options = {}) {
+  if (!sel) return;
+  const { short = false } = options;
+  const current = selectedCode || sel.value;
+  sel.innerHTML = '';
+  SUPPORTED_CURRENCIES.forEach((c) => {
+    const opt = document.createElement('option');
+    opt.value = c.code;
+    opt.textContent = short
+      ? `${c.symbol} ${c.code}`
+      : `${c.symbol} ${c.code} — ${c.name}`;
+    sel.appendChild(opt);
   });
+  if (isSupportedCurrency(current)) sel.value = current;
+}
 
+function populateCurrencySelects() {
   let incomeCode = DEFAULT_INCOME_CURRENCY;
   let expenseCode = DEFAULT_EXPENSE_CURRENCY;
   try {
@@ -361,8 +353,8 @@ function populateCurrencySelects() {
   if (!isSupportedCurrency(incomeCode)) incomeCode = DEFAULT_INCOME_CURRENCY;
   if (!isSupportedCurrency(expenseCode)) expenseCode = DEFAULT_EXPENSE_CURRENCY;
 
-  if (incomeCurrencySelect) incomeCurrencySelect.value = incomeCode;
-  if (expenseCurrencySelect) expenseCurrencySelect.value = expenseCode;
+  populateCurrencySelectOptions(incomeCurrencySelect, incomeCode);
+  populateCurrencySelectOptions(expenseCurrencySelect, expenseCode);
 }
 
 function updateDualColumnVisibility() {
@@ -374,17 +366,34 @@ function updateDualColumnVisibility() {
   if (bdNetAltHintEl) bdNetAltHintEl.hidden = !showAlt;
 }
 
+function updateMoneySymbols() {
+  if (salaryCurrencySymbolEl) {
+    salaryCurrencySymbolEl.textContent = getCurrencyMeta(getIncomeCurrency()).symbol;
+  }
+  document.querySelectorAll('.expense-row').forEach((tr) => {
+    const currencySelect = tr.querySelector('.expense-currency-select');
+    const symbolEl = tr.querySelector('.money-symbol');
+    if (currencySelect && symbolEl) {
+      symbolEl.textContent = getCurrencyMeta(currencySelect.value).symbol;
+    }
+  });
+}
+
 function updateCurrencyHeaders() {
   const incomeCode = getIncomeCurrency();
-  const expenseCode = getExpenseCurrency();
+  const reportingCode = getReportingCurrency();
   const incomeMeta = getCurrencyMeta(incomeCode);
-  const expenseMeta = getCurrencyMeta(expenseCode);
+  const reportingMeta = getCurrencyMeta(reportingCode);
 
-  if (fixedMonthlyHeadEl) fixedMonthlyHeadEl.textContent = `Monthly (${expenseCode})`;
-  if (variableMonthlyHeadEl) {
-    variableMonthlyHeadEl.textContent = `Monthly (${expenseCode})`;
+  if (fixedMonthlyHeadEl) {
+    fixedMonthlyHeadEl.textContent = `Monthly (${reportingCode})`;
   }
-  if (subsMonthlyHeadEl) subsMonthlyHeadEl.textContent = `Monthly (${expenseCode})`;
+  if (variableMonthlyHeadEl) {
+    variableMonthlyHeadEl.textContent = `Monthly (${reportingCode})`;
+  }
+  if (subsMonthlyHeadEl) {
+    subsMonthlyHeadEl.textContent = `Monthly (${reportingCode})`;
+  }
 
   const equivLabel = currenciesDiffer() ? `Equiv. (${incomeCode})` : 'Equiv.';
   if (fixedEquivHeadEl) fixedEquivHeadEl.textContent = equivLabel;
@@ -396,42 +405,41 @@ function updateCurrencyHeaders() {
   }
   if (splitExpenseHeadEl) {
     splitExpenseHeadEl.textContent = currenciesDiffer()
-      ? `Monthly (${expenseCode})`
+      ? `Monthly (${reportingCode})`
       : 'Monthly';
   }
 
-  if (summaryIncomeHeadEl) summaryIncomeHeadEl.textContent = `Income (${incomeCode})`;
+  if (summaryIncomeHeadEl) {
+    summaryIncomeHeadEl.textContent = `Income (${incomeCode})`;
+  }
   if (summaryExpenseHeadEl) {
     summaryExpenseHeadEl.textContent = currenciesDiffer()
-      ? `Expenses (${expenseCode})`
+      ? `Reporting (${reportingCode})`
       : 'Expenses';
-  }
-
-  if (salaryAmountInput) {
-    salaryAmountInput.placeholder = `Salary amount (${incomeMeta.symbol})`;
   }
 
   if (incomeHintEl) {
     if (currenciesDiffer()) {
-      incomeHintEl.textContent = `Enter salary in ${incomeMeta.name} (${incomeCode}). The line under “Per month” shows the same figure in ${expenseMeta.name} (${expenseCode}).`;
+      incomeHintEl.textContent = `Enter salary in ${incomeMeta.name} (${incomeCode}). Expense totals report in ${reportingMeta.name} (${reportingCode}).`;
     } else {
-      incomeHintEl.textContent = `Enter salary and expenses in ${incomeMeta.name} (${incomeCode}).`;
+      incomeHintEl.textContent = `Enter salary in ${incomeMeta.name} (${incomeCode}). Each expense can still use its own currency.`;
     }
   }
 
+  updateMoneySymbols();
   updateDualColumnVisibility();
 }
 
 function updateRateHints() {
   const incomeCode = getIncomeCurrency();
-  const expenseCode = getExpenseCurrency();
+  const reportingCode = getReportingCurrency();
 
   if (ratesMetaEl) {
     if (ratesLoading) {
       ratesMetaEl.textContent = 'Loading exchange rates…';
     } else if (!vndRatesCache) {
       ratesMetaEl.textContent =
-        'Exchange rates unavailable — converted columns show “—”. Check your internet connection.';
+        'Exchange rates unavailable — converted totals show “—”. Check your connection.';
     } else if (ratesFetchedAt) {
       ratesMetaEl.textContent = `Rates updated: ${ratesFetchedAt.toLocaleString()}.`;
     } else {
@@ -443,37 +451,16 @@ function updateRateHints() {
     if (!currenciesDiffer()) {
       expenseRateHintEl.textContent = '';
     } else if (!vndRatesCache) {
-      expenseRateHintEl.textContent = 'Rates needed for cross-currency summary.';
+      expenseRateHintEl.textContent = 'Rates needed for cross-currency totals.';
     } else {
-      const oneIncomeInExpense = convert(1, incomeCode, expenseCode);
-      if (Number.isFinite(oneIncomeInExpense)) {
-        expenseRateHintEl.textContent = `1 ${incomeCode} ≈ ${formatInCurrency(oneIncomeInExpense, expenseCode)}`;
+      const oneIncomeInReporting = convert(1, incomeCode, reportingCode);
+      if (Number.isFinite(oneIncomeInReporting)) {
+        expenseRateHintEl.textContent = `1 ${incomeCode} ≈ ${formatInCurrency(oneIncomeInReporting, reportingCode)}`;
       } else {
         expenseRateHintEl.textContent = '';
       }
     }
   }
-}
-
-function refreshExpenseTableEquiv(tbody) {
-  if (!tbody) return;
-  const incomeCode = getIncomeCurrency();
-  const expenseCode = getExpenseCurrency();
-  tbody.querySelectorAll('tr').forEach((tr) => {
-    const amountInput = tr.querySelector('td:nth-child(3) input');
-    const freqSelect = tr.querySelector('td:nth-child(2) select');
-    const monthlyEl = tr.querySelector('td:nth-child(4) strong');
-    const equivEl = tr.querySelector('td:nth-child(5) .equiv-amount');
-    if (!amountInput || !freqSelect || !monthlyEl) return;
-    const monthly = frequencyToMonthly(
-      parseAmount(amountInput.value),
-      freqSelect.value
-    );
-    monthlyEl.textContent = formatInCurrency(monthly, expenseCode);
-    if (equivEl) {
-      equivEl.textContent = formatConvertDisplay(monthly, expenseCode, incomeCode);
-    }
-  });
 }
 
 function getRatesObject(data) {
@@ -518,49 +505,16 @@ async function loadExchangeRates() {
   }
 }
 
-function frequencyToMonthly(amount, frequency) {
-  switch (frequency) {
-    case 'weekly':
-      return (amount * 52) / 12;
-    case 'fortnightly':
-      return (amount * 26) / 12;
-    case 'monthly':
-      return amount;
-    case 'quarterly':
-      return amount / 3;
-    case 'annually':
-      return amount / 12;
-    default:
-      return amount;
-  }
-}
-
 function updateIncome() {
   const amount = parseAmount(salaryAmountInput.value);
   const frequency = salaryFrequencySelect.value;
   const incomeCode = getIncomeCurrency();
-  const expenseCode = getExpenseCurrency();
+  const reportingCode = getReportingCurrency();
 
-  let weekly;
-  switch (frequency) {
-    case 'weekly':
-      weekly = amount;
-      break;
-    case 'fortnightly':
-      weekly = (amount * 26) / 52;
-      break;
-    case 'monthly':
-      weekly = (amount * 12) / 52;
-      break;
-    case 'annually':
-      weekly = amount / 52;
-      break;
-    default:
-      weekly = 0;
-  }
-
-  const perDay = weekly / 7;
-  const perMonth = (weekly * 52) / 12;
+  const normalized = Core
+    ? Core.incomeNormalized(amount, frequency)
+    : { perDay: 0, perWeek: 0, perMonth: 0 };
+  const { perDay, perWeek: weekly, perMonth } = normalized;
 
   incomePerDayEl.textContent = formatInCurrency(perDay, incomeCode);
   incomePerWeekEl.textContent = formatInCurrency(weekly, incomeCode);
@@ -570,7 +524,7 @@ function updateIncome() {
     incomePerMonthAltEl.textContent = formatConvertDisplay(
       perMonth,
       incomeCode,
-      expenseCode
+      reportingCode
     );
   }
 
@@ -585,6 +539,12 @@ function updateIncome() {
 
 function createExpenseRow(tbody, defaults = {}) {
   const tr = document.createElement('tr');
+  tr.className = 'expense-row';
+
+  const defaultCurrency =
+    (defaults.currency && isSupportedCurrency(defaults.currency)
+      ? defaults.currency
+      : getReportingCurrency());
 
   const nameTd = document.createElement('td');
   nameTd.dataset.label = 'Item';
@@ -592,8 +552,9 @@ function createExpenseRow(tbody, defaults = {}) {
   nameWrap.className = 'input-wrap';
   const nameInput = document.createElement('input');
   nameInput.type = 'text';
-  nameInput.className = 'cell-input';
+  nameInput.className = 'cell-input expense-name-input';
   nameInput.placeholder = 'e.g. Rent';
+  nameInput.setAttribute('aria-label', 'Expense name');
   if (defaults.name) nameInput.value = defaults.name;
   nameWrap.appendChild(nameInput);
   nameTd.appendChild(nameWrap);
@@ -603,33 +564,54 @@ function createExpenseRow(tbody, defaults = {}) {
   const freqWrap = document.createElement('div');
   freqWrap.className = 'input-wrap';
   const freqSelect = document.createElement('select');
-  freqSelect.className = 'cell-input';
+  freqSelect.className = 'cell-input expense-freq-select';
+  freqSelect.setAttribute('aria-label', 'Expense frequency');
   freqSelect.innerHTML = `
     <option value="weekly">Weekly</option>
     <option value="fortnightly">Fortnightly</option>
     <option value="monthly" selected>Monthly</option>
     <option value="quarterly">Quarterly</option>
-    <option value="annually">Annually</option>
+    <option value="annually">Yearly</option>
   `;
-  if (defaults.frequency) freqSelect.value = defaults.frequency;
+  if (defaults.frequency) {
+    const f = defaults.frequency === 'yearly' ? 'annually' : defaults.frequency;
+    freqSelect.value = f;
+  }
   freqWrap.appendChild(freqSelect);
   freqTd.appendChild(freqWrap);
+
+  const currencyTd = document.createElement('td');
+  currencyTd.dataset.label = 'Currency';
+  const currencyWrap = document.createElement('div');
+  currencyWrap.className = 'input-wrap';
+  const currencySelect = document.createElement('select');
+  currencySelect.className = 'cell-input expense-currency-select';
+  currencySelect.setAttribute('aria-label', 'Expense currency');
+  populateCurrencySelectOptions(currencySelect, defaultCurrency, { short: true });
+  currencyWrap.appendChild(currencySelect);
+  currencyTd.appendChild(currencyWrap);
 
   const amountTd = document.createElement('td');
   amountTd.dataset.label = 'Amount';
   const amountWrap = document.createElement('div');
-  amountWrap.className = 'input-wrap';
+  amountWrap.className = 'money-input-wrap input-wrap';
+  const symbolSpan = document.createElement('span');
+  symbolSpan.className = 'money-symbol';
+  symbolSpan.setAttribute('aria-hidden', 'true');
+  symbolSpan.textContent = getCurrencyMeta(defaultCurrency).symbol;
   const amountInput = document.createElement('input');
-  amountInput.className = 'cell-input';
+  amountInput.className = 'cell-input expense-amount-input';
   amountInput.placeholder = '0';
+  amountInput.setAttribute('aria-label', 'Expense amount');
   if (defaults.amount !== undefined && defaults.amount !== '') {
     amountInput.value = String(defaults.amount);
   }
   attachAmountInputFormatting(
     amountInput,
-    () => getCurrencyMeta(getExpenseCurrency()).decimals
+    () => getCurrencyMeta(currencySelect.value).decimals
   );
   if (amountInput.value) amountInput.formatAmountValue();
+  amountWrap.appendChild(symbolSpan);
   amountWrap.appendChild(amountInput);
   amountTd.appendChild(amountWrap);
 
@@ -637,7 +619,8 @@ function createExpenseRow(tbody, defaults = {}) {
   monthlyTd.className = 'align-right';
   monthlyTd.dataset.label = 'Monthly';
   const monthlyStrong = document.createElement('strong');
-  monthlyStrong.textContent = formatInCurrency(0, getExpenseCurrency());
+  monthlyStrong.className = 'expense-monthly';
+  monthlyStrong.textContent = '—';
   monthlyTd.appendChild(monthlyStrong);
 
   const foreignTd = document.createElement('td');
@@ -662,66 +645,272 @@ function createExpenseRow(tbody, defaults = {}) {
 
   tr.appendChild(nameTd);
   tr.appendChild(freqTd);
+  tr.appendChild(currencyTd);
   tr.appendChild(amountTd);
   tr.appendChild(monthlyTd);
   tr.appendChild(foreignTd);
   tr.appendChild(removeTd);
 
   function recalcRow() {
-    const expenseCode = getExpenseCurrency();
+    const rowCurrency = currencySelect.value;
     const incomeCode = getIncomeCurrency();
+    const reportingCode = getReportingCurrency();
     const amount = parseAmount(amountInput.value);
     const frequency = freqSelect.value;
     const monthly = frequencyToMonthly(amount, frequency);
-    monthlyStrong.textContent = formatInCurrency(monthly, expenseCode);
-    equivStrong.textContent = formatConvertDisplay(monthly, expenseCode, incomeCode);
+
+    symbolSpan.textContent = getCurrencyMeta(rowCurrency).symbol;
+    monthlyStrong.textContent = formatConvertDisplay(
+      monthly,
+      rowCurrency,
+      reportingCode
+    );
+    equivStrong.textContent = formatConvertDisplay(monthly, rowCurrency, incomeCode);
     recomputeAll();
   }
 
   amountInput.addEventListener('input', recalcRow);
   freqSelect.addEventListener('change', recalcRow);
+  currencySelect.addEventListener('change', () => {
+    if (amountInput.formatAmountValue) amountInput.formatAmountValue();
+    recalcRow();
+  });
   removeBtn.addEventListener('click', () => {
     tr.remove();
     recomputeAll();
   });
 
   tbody.appendChild(tr);
+  updateDualColumnVisibility();
   recalcRow();
 }
 
-function sumMonthlyFromTable(tbody) {
-  let total = 0;
-  tbody.querySelectorAll('tr').forEach((tr) => {
-    const amountInput = tr.querySelector('td:nth-child(3) input');
-    const freqSelect = tr.querySelector('td:nth-child(2) select');
-    if (!amountInput || !freqSelect) return;
-    const amount = parseAmount(amountInput.value);
-    const frequency = freqSelect.value;
-    total += frequencyToMonthly(amount, frequency);
+function collectRowsFromTable(tbody) {
+  const out = [];
+  if (!tbody) return out;
+  tbody.querySelectorAll('tr.expense-row').forEach((tr) => {
+    const nameInput = tr.querySelector('.expense-name-input');
+    const freqSelect = tr.querySelector('.expense-freq-select');
+    const currencySelect = tr.querySelector('.expense-currency-select');
+    const amountInput = tr.querySelector('.expense-amount-input');
+    if (!nameInput || !freqSelect || !amountInput) return;
+    out.push({
+      name: nameInput.value,
+      frequency: freqSelect.value,
+      amount: parseAmount(amountInput.value),
+      currency:
+        (currencySelect && currencySelect.value) || getReportingCurrency(),
+    });
   });
-  return total;
+  return out;
 }
 
-function updatePercentages(incomePerMonthVnd, totalExpensesNative, totalExpensesVnd) {
+function aggregateTable(tbody) {
+  const rows = collectRowsFromTable(tbody);
+  return Core
+    ? Core.aggregateExpenseRows(rows, getReportingCurrency(), vndRatesCache)
+    : { totalVnd: 0, totalReporting: 0, ok: true, missingRates: [] };
+}
+
+function refreshExpenseTableDisplay(tbody) {
+  if (!tbody) return;
   const incomeCode = getIncomeCurrency();
-  const expenseCode = getExpenseCurrency();
-  let totalPercent = 0;
-  let plannedSavingsBucketsVnd = 0;
-
-  percentageInputs.forEach((input) => {
-    const raw = parseAmount(input.value);
-    const safePercent = Math.max(0, Math.min(100, raw));
-    if (safePercent !== raw) {
-      input.value = safePercent.toString();
+  const reportingCode = getReportingCurrency();
+  tbody.querySelectorAll('tr.expense-row').forEach((tr) => {
+    const amountInput = tr.querySelector('.expense-amount-input');
+    const freqSelect = tr.querySelector('.expense-freq-select');
+    const currencySelect = tr.querySelector('.expense-currency-select');
+    const monthlyEl = tr.querySelector('.expense-monthly');
+    const equivEl = tr.querySelector('.equiv-amount');
+    const symbolEl = tr.querySelector('.money-symbol');
+    if (!amountInput || !freqSelect || !currencySelect || !monthlyEl) return;
+    const rowCurrency = currencySelect.value;
+    const monthly = frequencyToMonthly(
+      parseAmount(amountInput.value),
+      freqSelect.value
+    );
+    if (symbolEl) symbolEl.textContent = getCurrencyMeta(rowCurrency).symbol;
+    monthlyEl.textContent = formatConvertDisplay(
+      monthly,
+      rowCurrency,
+      reportingCode
+    );
+    if (equivEl) {
+      equivEl.textContent = formatConvertDisplay(monthly, rowCurrency, incomeCode);
     }
-    totalPercent += safePercent;
+  });
+}
 
-    const key = input.dataset.percentageInput;
+function syncSplitsFromDom() {
+  if (!budgetSplitBody) return;
+  budgetSplitBody.querySelectorAll('tr[data-split-id]').forEach((tr) => {
+    const id = tr.dataset.splitId;
+    const split = currentSplits.find((s) => s.id === id);
+    if (!split) return;
+    const labelInput = tr.querySelector('.split-label-input');
+    const pctInput = tr.querySelector('.percentage-input');
+    if (labelInput && !split.required) {
+      split.label = labelInput.value.trim() || split.label;
+    }
+    if (pctInput) {
+      const raw = parseAmount(pctInput.value);
+      split.percent = Math.max(0, Math.min(100, raw));
+    }
+  });
+}
+
+function renderBudgetSplits() {
+  if (!budgetSplitBody) return;
+  budgetSplitBody.innerHTML = '';
+
+  currentSplits.forEach((split) => {
+    const tr = document.createElement('tr');
+    tr.dataset.splitId = split.id;
+    tr.dataset.category = split.kind;
+    tr.dataset.splitKind = split.kind;
+
+    const labelTd = document.createElement('td');
+    labelTd.dataset.label = 'Category';
+    if (split.required) {
+      const span = document.createElement('span');
+      span.className = 'split-label-static';
+      span.textContent = split.label;
+      labelTd.appendChild(span);
+    } else {
+      const wrap = document.createElement('div');
+      wrap.className = 'input-wrap';
+      const input = document.createElement('input');
+      input.type = 'text';
+      input.className = 'cell-input split-label-input';
+      input.value = split.label;
+      input.setAttribute('aria-label', 'Category name');
+      input.placeholder = 'e.g. Travel';
+      input.addEventListener('input', () => {
+        syncSplitsFromDom();
+        const pctInput = tr.querySelector('.percentage-input');
+        const removeBtn = tr.querySelector('.btn-icon');
+        if (pctInput) {
+          pctInput.setAttribute('aria-label', `${input.value || 'Category'} percentage`);
+        }
+        if (removeBtn) {
+          removeBtn.setAttribute('aria-label', `Remove ${input.value || 'category'}`);
+          removeBtn.title = 'Remove category';
+        }
+        recomputeAll();
+      });
+      wrap.appendChild(input);
+      labelTd.appendChild(wrap);
+    }
+
+    const pctTd = document.createElement('td');
+    pctTd.dataset.label = 'Percentage';
+    pctTd.className = 'split-pct-cell';
+    const pctInput = document.createElement('input');
+    pctInput.type = 'number';
+    pctInput.className = 'percentage-input';
+    pctInput.min = '0';
+    pctInput.max = '100';
+    pctInput.value = String(split.percent);
+    pctInput.setAttribute('aria-label', `${split.label} percentage`);
+    pctInput.addEventListener('input', () => {
+      syncSplitsFromDom();
+      recomputeAll();
+    });
+    pctTd.appendChild(pctInput);
+    pctTd.appendChild(document.createTextNode('%'));
+
+    const amountTd = document.createElement('td');
+    amountTd.className = 'align-right';
+    amountTd.dataset.label = 'Monthly';
+    const amountStrong = document.createElement('strong');
+    amountStrong.className = 'split-amount';
+    amountStrong.dataset.splitAmount = split.id;
+    amountStrong.textContent = '—';
+    amountTd.appendChild(amountStrong);
+
+    const foreignTd = document.createElement('td');
+    foreignTd.className = 'align-right split-foreign dual-col';
+    foreignTd.dataset.dualCol = 'equiv';
+    foreignTd.dataset.splitForeign = split.id;
+    foreignTd.dataset.label = 'Equiv.';
+    foreignTd.textContent = '—';
+
+    const statusTd = document.createElement('td');
+    statusTd.className = 'align-right status-cell';
+    statusTd.dataset.status = split.id;
+    statusTd.dataset.label = 'Status';
+
+    const actionsTd = document.createElement('td');
+    actionsTd.className = 'align-right';
+    actionsTd.dataset.label = '';
+    if (!split.required) {
+      const removeBtn = document.createElement('button');
+      removeBtn.type = 'button';
+      removeBtn.className = 'btn-icon';
+      removeBtn.title = 'Remove category';
+      removeBtn.setAttribute('aria-label', `Remove ${split.label}`);
+      removeBtn.innerHTML = icon('trash', { size: 16, className: 'icon icon--sm' });
+      removeBtn.addEventListener('click', () => {
+        currentSplits = currentSplits.filter((s) => s.id !== split.id);
+        renderBudgetSplits();
+        recomputeAll();
+      });
+      actionsTd.appendChild(removeBtn);
+    }
+
+    tr.appendChild(labelTd);
+    tr.appendChild(pctTd);
+    tr.appendChild(amountTd);
+    tr.appendChild(foreignTd);
+    tr.appendChild(statusTd);
+    tr.appendChild(actionsTd);
+    budgetSplitBody.appendChild(tr);
+  });
+
+  updateDualColumnVisibility();
+}
+
+function addSplitCategory() {
+  syncSplitsFromDom();
+  const id =
+    typeof crypto !== 'undefined' && crypto.randomUUID
+      ? crypto.randomUUID()
+      : `split-${Date.now()}`;
+  currentSplits.push({
+    id,
+    label: 'New category',
+    percent: 0,
+    kind: 'goal',
+    required: false,
+  });
+  renderBudgetSplits();
+  recomputeAll();
+  const row = budgetSplitBody && budgetSplitBody.querySelector(`[data-split-id="${id}"]`);
+  const labelInput = row && row.querySelector('.split-label-input');
+  if (labelInput) {
+    labelInput.focus();
+    labelInput.select();
+  }
+}
+
+function updatePercentages(incomePerMonthVnd, totalExpensesVnd, expensesOk) {
+  const incomeCode = getIncomeCurrency();
+  const reportingCode = getReportingCurrency();
+  syncSplitsFromDom();
+
+  const validation = Core
+    ? Core.validateSplits(currentSplits)
+    : { totalPercent: 100, status: 'exact', remainder: 0 };
+
+  let plannedGoalsVnd = 0;
+
+  currentSplits.forEach((split) => {
+    const safePercent = Math.max(0, Math.min(100, Number(split.percent) || 0));
     const monthlyTargetVnd = (incomePerMonthVnd * safePercent) / 100;
     const monthlyTargetIncome = fromVnd(monthlyTargetVnd, incomeCode);
 
     const amountEl = document.querySelector(
-      `.split-amount[data-split-amount="${key}"]`
+      `.split-amount[data-split-amount="${split.id}"]`
     );
     if (amountEl) {
       amountEl.textContent = Number.isFinite(monthlyTargetIncome)
@@ -729,93 +918,126 @@ function updatePercentages(incomePerMonthVnd, totalExpensesNative, totalExpenses
         : '—';
     }
 
-    const splitAlt = document.querySelector(`[data-split-foreign="${key}"]`);
+    const splitAlt = document.querySelector(`[data-split-foreign="${split.id}"]`);
     if (splitAlt) {
-      splitAlt.textContent = Number.isFinite(monthlyTargetVnd)
-        ? formatInCurrency(fromVnd(monthlyTargetVnd, expenseCode), expenseCode)
+      const reportingAmount = fromVnd(monthlyTargetVnd, reportingCode);
+      splitAlt.textContent = Number.isFinite(reportingAmount)
+        ? formatInCurrency(reportingAmount, reportingCode)
         : '—';
     }
 
-    if (key === 'savings' || key === 'emergency' || key === 'investments') {
-      plannedSavingsBucketsVnd += monthlyTargetVnd;
+    if (split.kind !== 'expenses') {
+      plannedGoalsVnd += monthlyTargetVnd;
     }
   });
 
-  totalPercentageEl.textContent = `${totalPercent.toFixed(0)}%`;
-  const totalBudgetedVnd = (incomePerMonthVnd * totalPercent) / 100;
-  const totalBudgetedIncome = fromVnd(totalBudgetedVnd, incomeCode);
-  totalBudgetedEl.textContent = Number.isFinite(totalBudgetedIncome)
-    ? formatInCurrency(totalBudgetedIncome, incomeCode)
-    : '—';
-  if (totalBudgetedAltEl) {
-    totalBudgetedAltEl.textContent = Number.isFinite(totalBudgetedVnd)
-      ? formatInCurrency(fromVnd(totalBudgetedVnd, expenseCode), expenseCode)
-      : '—';
+  if (totalPercentageEl) {
+    totalPercentageEl.textContent = `${validation.totalPercent.toFixed(0)}%`;
+    totalPercentageEl.classList.remove(
+      'split-total--exact',
+      'split-total--under',
+      'split-total--over'
+    );
+    totalPercentageEl.classList.add(`split-total--${validation.status}`);
   }
 
-  const expensesTargetPercentInput = document.querySelector(
-    '[data-percentage-input="expenses"]'
-  );
-  const expensesStatusCell = document.querySelector(
-    '[data-status="expenses"]'
-  );
-
-  if (expensesTargetPercentInput && expensesStatusCell) {
-    const targetPercent = parseAmount(expensesTargetPercentInput.value);
-    const targetVnd = (incomePerMonthVnd * targetPercent) / 100;
-    const threshold = Math.max(
-      1,
-      Math.abs(toVnd(1, expenseCode) || 1) * 0.01
-    );
-
-    if (!incomePerMonthVnd || incomePerMonthVnd <= 0) {
-      expensesStatusCell.textContent = '';
-      expensesStatusCell.className = 'status-cell';
-    } else if (totalExpensesVnd < targetVnd - threshold) {
-      expensesStatusCell.textContent = 'Under budget';
-      expensesStatusCell.className = 'status-cell status-under';
-    } else if (totalExpensesVnd > targetVnd + threshold) {
-      expensesStatusCell.textContent = 'Over budget';
-      expensesStatusCell.className = 'status-cell status-over';
+  if (splitValidationHintEl) {
+    if (validation.status === 'exact') {
+      splitValidationHintEl.textContent = 'Ready — totals 100%';
+      splitValidationHintEl.className = 'split-validation hint split-validation--ok';
+    } else if (validation.status === 'under') {
+      splitValidationHintEl.textContent = `${validation.remainder}% still unallocated`;
+      splitValidationHintEl.className = 'split-validation hint split-validation--under';
     } else {
-      expensesStatusCell.textContent = 'On target';
-      expensesStatusCell.className = 'status-cell status-on';
+      splitValidationHintEl.textContent = `${validation.remainder}% over 100%`;
+      splitValidationHintEl.className = 'split-validation hint split-validation--over';
     }
   }
 
+  const totalBudgetedVnd = (incomePerMonthVnd * validation.totalPercent) / 100;
+  const totalBudgetedIncome = fromVnd(totalBudgetedVnd, incomeCode);
+  if (totalBudgetedEl) {
+    totalBudgetedEl.textContent = Number.isFinite(totalBudgetedIncome)
+      ? formatInCurrency(totalBudgetedIncome, incomeCode)
+      : '—';
+  }
+  if (totalBudgetedAltEl) {
+    const alt = fromVnd(totalBudgetedVnd, reportingCode);
+    totalBudgetedAltEl.textContent = Number.isFinite(alt)
+      ? formatInCurrency(alt, reportingCode)
+      : '—';
+  }
+
+  const expensesSplit = currentSplits.find((s) => s.kind === 'expenses');
+  if (expensesSplit) {
+    const expensesStatusCell = document.querySelector(
+      `[data-status="${expensesSplit.id}"]`
+    );
+    if (expensesStatusCell) {
+      const targetVnd = (incomePerMonthVnd * (Number(expensesSplit.percent) || 0)) / 100;
+      const threshold = Math.max(
+        1,
+        Math.abs(toVnd(1, reportingCode) || 1) * 0.01
+      );
+
+      if (!incomePerMonthVnd || incomePerMonthVnd <= 0 || !expensesOk) {
+        expensesStatusCell.textContent = expensesOk ? '' : 'Rates needed';
+        expensesStatusCell.className = 'status-cell';
+      } else if (totalExpensesVnd < targetVnd - threshold) {
+        expensesStatusCell.textContent = 'Under budget';
+        expensesStatusCell.className = 'status-cell status-under';
+      } else if (totalExpensesVnd > targetVnd + threshold) {
+        expensesStatusCell.textContent = 'Over budget';
+        expensesStatusCell.className = 'status-cell status-over';
+      } else {
+        expensesStatusCell.textContent = 'On target';
+        expensesStatusCell.className = 'status-cell status-on';
+      }
+    }
+  }
+
+  const plannedSavingsBucketsNative = fromVnd(plannedGoalsVnd, incomeCode);
   return {
-    totalPercent,
-    plannedSavingsBucketsVnd,
-    plannedSavingsBucketsNative: fromVnd(plannedSavingsBucketsVnd, incomeCode),
+    totalPercent: validation.totalPercent,
+    plannedSavingsBucketsVnd: plannedGoalsVnd,
+    plannedSavingsBucketsNative: Number.isFinite(plannedSavingsBucketsNative)
+      ? plannedSavingsBucketsNative
+      : 0,
+    validation,
   };
 }
 
-function setSummaryDualRow(primaryEl, altEl, amountNative, nativeCode, altCode, rowKind) {
+function setSummaryDualRow(primaryEl, altEl, amountNative, nativeCode, rowKind) {
   const incomeCode = getIncomeCurrency();
-  const expenseCode = getExpenseCurrency();
+  const reportingCode = getReportingCurrency();
 
   if (rowKind === 'income') {
     if (primaryEl) {
       primaryEl.textContent = formatInCurrency(amountNative, incomeCode);
     }
     if (altEl) {
-      altEl.textContent = formatConvertDisplay(amountNative, incomeCode, expenseCode);
+      altEl.textContent = formatConvertDisplay(amountNative, incomeCode, reportingCode);
     }
     return;
   }
 
   if (rowKind === 'expense') {
+    // amountNative is already in reporting currency (or NaN)
     if (primaryEl) {
-      primaryEl.textContent = formatConvertDisplay(amountNative, expenseCode, incomeCode);
+      primaryEl.textContent = Number.isFinite(amountNative)
+        ? formatConvertDisplay(amountNative, reportingCode, incomeCode)
+        : '—';
     }
     if (altEl) {
-      altEl.textContent = formatInCurrency(amountNative, expenseCode);
+      altEl.textContent = Number.isFinite(amountNative)
+        ? formatInCurrency(amountNative, reportingCode)
+        : '—';
     }
     return;
   }
 
   if (rowKind === 'remaining') {
-    const vnd = toVnd(amountNative, nativeCode);
+    const vnd = amountNative;
     if (primaryEl) {
       primaryEl.textContent = Number.isFinite(vnd)
         ? formatInCurrency(fromVnd(vnd, incomeCode), incomeCode)
@@ -823,7 +1045,7 @@ function setSummaryDualRow(primaryEl, altEl, amountNative, nativeCode, altCode, 
     }
     if (altEl) {
       altEl.textContent = Number.isFinite(vnd)
-        ? formatInCurrency(fromVnd(vnd, expenseCode), expenseCode)
+        ? formatInCurrency(fromVnd(vnd, reportingCode), reportingCode)
         : '—';
     }
   }
@@ -832,55 +1054,54 @@ function setSummaryDualRow(primaryEl, altEl, amountNative, nativeCode, altCode, 
 function updateSummary({
   incomePerMonth,
   incomePerMonthVnd,
-  totalFixedMonthly,
-  totalVariableMonthly,
-  totalSubsMonthly,
+  totalFixedReporting,
+  totalVariableReporting,
+  totalSubsReporting,
+  totalExpensesVnd,
+  expensesOk,
   plannedSavingsBucketsNative,
 }) {
   const incomeCode = getIncomeCurrency();
-  const expenseCode = getExpenseCurrency();
-  const allExpenses = totalFixedMonthly + totalVariableMonthly + totalSubsMonthly;
-  const allExpensesVnd = toVnd(allExpenses, expenseCode);
-  const remainingVnd = incomePerMonthVnd - allExpensesVnd;
+  const remainingVnd = expensesOk
+    ? incomePerMonthVnd - totalExpensesVnd
+    : NaN;
 
-  setSummaryDualRow(
-    summaryIncomeEl,
-    summaryIncomeAltEl,
-    incomePerMonth,
-    incomeCode,
-    expenseCode,
-    'income'
-  );
+  setSummaryDualRow(summaryIncomeEl, summaryIncomeAltEl, incomePerMonth, incomeCode, 'income');
   setSummaryDualRow(
     summaryFixedEl,
     summaryFixedAltEl,
-    totalFixedMonthly,
-    expenseCode,
-    incomeCode,
+    totalFixedReporting,
+    null,
     'expense'
   );
   setSummaryDualRow(
     summaryVariableEl,
     summaryVariableAltEl,
-    totalVariableMonthly,
-    expenseCode,
-    incomeCode,
+    totalVariableReporting,
+    null,
     'expense'
   );
   setSummaryDualRow(
     summarySubsEl,
     summarySubsAltEl,
-    totalSubsMonthly,
-    expenseCode,
-    incomeCode,
+    totalSubsReporting,
+    null,
     'expense'
   );
+
+  const allReporting =
+    expensesOk &&
+    Number.isFinite(totalFixedReporting) &&
+    Number.isFinite(totalVariableReporting) &&
+    Number.isFinite(totalSubsReporting)
+      ? totalFixedReporting + totalVariableReporting + totalSubsReporting
+      : NaN;
+
   setSummaryDualRow(
     summaryAllExpensesEl,
     summaryAllExpensesAltEl,
-    allExpenses,
-    expenseCode,
-    incomeCode,
+    allReporting,
+    null,
     'expense'
   );
   setSummaryDualRow(
@@ -888,7 +1109,6 @@ function updateSummary({
     summaryRemainingAltEl,
     remainingVnd,
     'VND',
-    expenseCode,
     'remaining'
   );
   setSummaryDualRow(
@@ -896,7 +1116,6 @@ function updateSummary({
     summaryPlannedGoalsAltEl,
     plannedSavingsBucketsNative,
     incomeCode,
-    expenseCode,
     'income'
   );
 
@@ -904,6 +1123,13 @@ function updateSummary({
 
   if (!incomePerMonthVnd || incomePerMonthVnd <= 0) {
     summaryStatusTextEl.textContent = 'Enter income to see status';
+    summaryStatusTextEl.classList.add('badge-neutral');
+    return;
+  }
+
+  if (!expensesOk) {
+    summaryStatusTextEl.textContent =
+      'Exchange rates needed to combine mixed-currency expenses';
     summaryStatusTextEl.classList.add('badge-neutral');
     return;
   }
@@ -918,7 +1144,7 @@ function updateSummary({
     plannedSavingsVnd > remainingVnd + Math.max(1, remainingVnd * 0.001)
   ) {
     summaryStatusTextEl.textContent =
-      'Savings plan is higher than what is left after expenses';
+      'Goals plan is higher than what is left after expenses';
     summaryStatusTextEl.classList.add('badge-bad');
   } else if (
     Number.isFinite(plannedSavingsVnd) &&
@@ -933,7 +1159,7 @@ function updateSummary({
   }
 }
 
-function fillBreakdownCells(prefix, monthlyNative, currencyCode) {
+function fillBreakdownCells(prefix, monthlyNative, currencyCode, ok = true) {
   const monthlyToDaily = (m) => (m * 12) / 365;
   const monthlyToWeekly = (m) => (m * 12) / 52;
   const monthlyToAnnual = (m) => m * 12;
@@ -942,6 +1168,14 @@ function fillBreakdownCells(prefix, monthlyNative, currencyCode) {
   const weeklyEl = document.getElementById(`${prefix}Weekly`);
   const monthlyEl = document.getElementById(`${prefix}Monthly`);
   const annualEl = document.getElementById(`${prefix}Annual`);
+
+  if (!ok || !Number.isFinite(monthlyNative)) {
+    if (monthlyEl) monthlyEl.textContent = '—';
+    if (dailyEl) dailyEl.textContent = '—';
+    if (weeklyEl) weeklyEl.textContent = '—';
+    if (annualEl) annualEl.textContent = '—';
+    return;
+  }
 
   if (monthlyEl) monthlyEl.textContent = formatInCurrency(monthlyNative, currencyCode);
   if (dailyEl) {
@@ -957,52 +1191,47 @@ function fillBreakdownCells(prefix, monthlyNative, currencyCode) {
 
 function updateBreakdown({
   incomePerMonth,
-  totalFixedMonthly,
-  totalVariableMonthly,
-  totalSubsMonthly,
+  totalFixedReporting,
+  totalVariableReporting,
+  totalSubsReporting,
+  allExpensesReporting,
   plannedSavingsBucketsNative,
   incomePerMonthVnd,
+  totalExpensesVnd,
+  expensesOk,
 }) {
   const incomeCode = getIncomeCurrency();
-  const expenseCode = getExpenseCurrency();
-  const allExpensesMonthly =
-    totalFixedMonthly + totalVariableMonthly + totalSubsMonthly;
-  const allExpensesVnd = toVnd(allExpensesMonthly, expenseCode);
-  const netVnd = incomePerMonthVnd - allExpensesVnd;
+  const reportingCode = getReportingCurrency();
+  const netVnd = expensesOk ? incomePerMonthVnd - totalExpensesVnd : NaN;
   const netIncome = fromVnd(netVnd, incomeCode);
-  const netExpense = fromVnd(netVnd, expenseCode);
+  const netReporting = fromVnd(netVnd, reportingCode);
 
-  fillBreakdownCells('bdIncome', incomePerMonth, incomeCode);
-  fillBreakdownCells('bdFixed', totalFixedMonthly, expenseCode);
-  fillBreakdownCells('bdVariable', totalVariableMonthly, expenseCode);
-  fillBreakdownCells('bdSubs', totalSubsMonthly, expenseCode);
-  fillBreakdownCells('bdAll', allExpensesMonthly, expenseCode);
-  fillBreakdownCells('bdGoals', plannedSavingsBucketsNative, incomeCode);
+  fillBreakdownCells('bdIncome', incomePerMonth, incomeCode, true);
+  fillBreakdownCells('bdFixed', totalFixedReporting, reportingCode, expensesOk);
+  fillBreakdownCells(
+    'bdVariable',
+    totalVariableReporting,
+    reportingCode,
+    expensesOk
+  );
+  fillBreakdownCells('bdSubs', totalSubsReporting, reportingCode, expensesOk);
+  fillBreakdownCells('bdAll', allExpensesReporting, reportingCode, expensesOk);
+  fillBreakdownCells('bdGoals', plannedSavingsBucketsNative, incomeCode, true);
 
-  if (bdNetDailyEl) {
-    bdNetDailyEl.textContent = Number.isFinite(netIncome)
-      ? formatInCurrency((netIncome * 12) / 365, incomeCode)
+  const setNet = (el, value) => {
+    if (!el) return;
+    el.textContent = Number.isFinite(value)
+      ? formatInCurrency(value, incomeCode)
       : '—';
-  }
-  if (bdNetWeeklyEl) {
-    bdNetWeeklyEl.textContent = Number.isFinite(netIncome)
-      ? formatInCurrency((netIncome * 12) / 52, incomeCode)
-      : '—';
-  }
-  if (bdNetMonthlyEl) {
-    bdNetMonthlyEl.textContent = Number.isFinite(netIncome)
-      ? formatInCurrency(netIncome, incomeCode)
-      : '—';
-  }
-  if (bdNetAnnualEl) {
-    bdNetAnnualEl.textContent = Number.isFinite(netIncome)
-      ? formatInCurrency(netIncome * 12, incomeCode)
-      : '—';
-  }
+  };
+  setNet(bdNetDailyEl, Number.isFinite(netIncome) ? (netIncome * 12) / 365 : NaN);
+  setNet(bdNetWeeklyEl, Number.isFinite(netIncome) ? (netIncome * 12) / 52 : NaN);
+  setNet(bdNetMonthlyEl, netIncome);
+  setNet(bdNetAnnualEl, Number.isFinite(netIncome) ? netIncome * 12 : NaN);
 
   if (bdNetAltHintEl) {
-    if (currenciesDiffer() && Number.isFinite(netExpense)) {
-      bdNetAltHintEl.textContent = `Net in ${expenseCode}: ${formatInCurrency(netExpense, expenseCode)} monthly (${formatInCurrency(netExpense * 12, expenseCode)} annual)`;
+    if (currenciesDiffer() && Number.isFinite(netReporting)) {
+      bdNetAltHintEl.textContent = `Net in ${reportingCode}: ${formatInCurrency(netReporting, reportingCode)} monthly (${formatInCurrency(netReporting * 12, reportingCode)} annual)`;
     } else {
       bdNetAltHintEl.textContent = '';
     }
@@ -1010,21 +1239,20 @@ function updateBreakdown({
 }
 
 function updateChart({
-  totalFixedMonthly,
-  totalVariableMonthly,
-  totalSubsMonthly,
+  totalFixedVnd,
+  totalVariableVnd,
+  totalSubsVnd,
   plannedSavingsBucketsVnd,
   incomePerMonthVnd,
+  expensesOk,
 }) {
-  const expenseCode = getExpenseCurrency();
-  const fixedVnd = toVnd(totalFixedMonthly, expenseCode);
-  const variableVnd = toVnd(totalVariableMonthly, expenseCode);
-  const subsVnd = toVnd(totalSubsMonthly, expenseCode);
-  const allExpensesVnd =
-    (Number.isFinite(fixedVnd) ? fixedVnd : 0) +
-    (Number.isFinite(variableVnd) ? variableVnd : 0) +
-    (Number.isFinite(subsVnd) ? subsVnd : 0);
-  const remainingAfterAll = incomePerMonthVnd - allExpensesVnd - plannedSavingsBucketsVnd;
+  const fixedVnd = expensesOk && Number.isFinite(totalFixedVnd) ? totalFixedVnd : 0;
+  const variableVnd =
+    expensesOk && Number.isFinite(totalVariableVnd) ? totalVariableVnd : 0;
+  const subsVnd = expensesOk && Number.isFinite(totalSubsVnd) ? totalSubsVnd : 0;
+  const allExpensesVnd = fixedVnd + variableVnd + subsVnd;
+  const remainingAfterAll =
+    incomePerMonthVnd - allExpensesVnd - plannedSavingsBucketsVnd;
 
   const labels = [
     'Fixed expenses',
@@ -1034,15 +1262,17 @@ function updateChart({
     'Unallocated',
   ];
   const data = [
-    Math.max(Number.isFinite(fixedVnd) ? fixedVnd : 0, 0),
-    Math.max(Number.isFinite(variableVnd) ? variableVnd : 0, 0),
-    Math.max(Number.isFinite(subsVnd) ? subsVnd : 0, 0),
+    Math.max(fixedVnd, 0),
+    Math.max(variableVnd, 0),
+    Math.max(subsVnd, 0),
     Math.max(plannedSavingsBucketsVnd, 0),
     Math.max(remainingAfterAll, 0),
   ];
 
   if (!chartInstance) {
-    const ctx = document.getElementById('spendingChart').getContext('2d');
+    const canvas = document.getElementById('spendingChart');
+    if (!canvas) return;
+    const ctx = canvas.getContext('2d');
     chartInstance = new Chart(ctx, {
       type: 'doughnut',
       data: {
@@ -1050,13 +1280,7 @@ function updateChart({
         datasets: [
           {
             data,
-            backgroundColor: [
-              '#7B14EF',
-              '#00B4A0',
-              '#FFC845',
-              '#C026D3',
-              '#E5E7EB',
-            ],
+            backgroundColor: CHART_COLORS,
             borderWidth: 0,
           },
         ],
@@ -1082,88 +1306,101 @@ function updateChart({
   }
 }
 
+function formatAggTotal(agg) {
+  if (!agg.ok || !Number.isFinite(agg.totalReporting)) return '—';
+  return formatInCurrency(agg.totalReporting, getReportingCurrency());
+}
+
 function recomputeAll() {
   const { perMonth: incomePerMonth, perMonthVnd: incomePerMonthVnd } = updateIncome();
-  const expenseCode = getExpenseCurrency();
   const incomeCode = getIncomeCurrency();
+  const reportingCode = getReportingCurrency();
 
-  const totalFixedMonthly = sumMonthlyFromTable(fixedExpensesBody);
-  totalFixedMonthlyEl.textContent = formatInCurrency(totalFixedMonthly, expenseCode);
+  const fixedAgg = aggregateTable(fixedExpensesBody);
+  const variableAgg = aggregateTable(variableExpensesBody);
+  const subsAgg = aggregateTable(subscriptionsBody);
 
-  const totalVariableMonthly = sumMonthlyFromTable(variableExpensesBody);
-  totalVariableMonthlyEl.textContent = formatInCurrency(
-    totalVariableMonthly,
-    expenseCode
-  );
+  const expensesOk = fixedAgg.ok && variableAgg.ok && subsAgg.ok;
+  const totalExpensesVnd = expensesOk
+    ? fixedAgg.totalVnd + variableAgg.totalVnd + subsAgg.totalVnd
+    : NaN;
 
-  const totalSubsMonthly = sumMonthlyFromTable(subscriptionsBody);
-  totalSubsMonthlyEl.textContent = formatInCurrency(totalSubsMonthly, expenseCode);
-
-  const totalExpensesNative =
-    totalFixedMonthly + totalVariableMonthly + totalSubsMonthly;
-  const totalExpensesVnd = toVnd(totalExpensesNative, expenseCode);
+  if (totalFixedMonthlyEl) totalFixedMonthlyEl.textContent = formatAggTotal(fixedAgg);
+  if (totalVariableMonthlyEl) {
+    totalVariableMonthlyEl.textContent = formatAggTotal(variableAgg);
+  }
+  if (totalSubsMonthlyEl) totalSubsMonthlyEl.textContent = formatAggTotal(subsAgg);
 
   const { plannedSavingsBucketsVnd, plannedSavingsBucketsNative } = updatePercentages(
     incomePerMonthVnd,
-    totalExpensesNative,
-    Number.isFinite(totalExpensesVnd) ? totalExpensesVnd : 0
+    Number.isFinite(totalExpensesVnd) ? totalExpensesVnd : 0,
+    expensesOk
   );
 
   updateSummary({
     incomePerMonth,
     incomePerMonthVnd,
-    totalFixedMonthly,
-    totalVariableMonthly,
-    totalSubsMonthly,
-    plannedSavingsBucketsNative: Number.isFinite(plannedSavingsBucketsNative)
-      ? plannedSavingsBucketsNative
-      : 0,
+    totalFixedReporting: fixedAgg.totalReporting,
+    totalVariableReporting: variableAgg.totalReporting,
+    totalSubsReporting: subsAgg.totalReporting,
+    totalExpensesVnd: Number.isFinite(totalExpensesVnd) ? totalExpensesVnd : 0,
+    expensesOk,
+    plannedSavingsBucketsNative,
   });
+
+  const allReporting = expensesOk
+    ? fixedAgg.totalReporting +
+      variableAgg.totalReporting +
+      subsAgg.totalReporting
+    : NaN;
 
   updateBreakdown({
     incomePerMonth,
-    totalFixedMonthly,
-    totalVariableMonthly,
-    totalSubsMonthly,
-    plannedSavingsBucketsNative: Number.isFinite(plannedSavingsBucketsNative)
-      ? plannedSavingsBucketsNative
-      : 0,
+    totalFixedReporting: fixedAgg.totalReporting,
+    totalVariableReporting: variableAgg.totalReporting,
+    totalSubsReporting: subsAgg.totalReporting,
+    allExpensesReporting: allReporting,
+    plannedSavingsBucketsNative,
     incomePerMonthVnd,
+    totalExpensesVnd: Number.isFinite(totalExpensesVnd) ? totalExpensesVnd : 0,
+    expensesOk,
   });
 
   updateChart({
     incomePerMonthVnd,
-    totalFixedMonthly,
-    totalVariableMonthly,
-    totalSubsMonthly,
+    totalFixedVnd: fixedAgg.totalVnd,
+    totalVariableVnd: variableAgg.totalVnd,
+    totalSubsVnd: subsAgg.totalVnd,
     plannedSavingsBucketsVnd,
+    expensesOk,
   });
 
   if (totalFixedEquivEl) {
-    totalFixedEquivEl.textContent = formatConvertDisplay(
-      totalFixedMonthly,
-      expenseCode,
-      incomeCode
-    );
+    totalFixedEquivEl.textContent =
+      expensesOk && Number.isFinite(fixedAgg.totalReporting)
+        ? formatConvertDisplay(fixedAgg.totalReporting, reportingCode, incomeCode)
+        : '—';
   }
   if (totalVariableEquivEl) {
-    totalVariableEquivEl.textContent = formatConvertDisplay(
-      totalVariableMonthly,
-      expenseCode,
-      incomeCode
-    );
+    totalVariableEquivEl.textContent =
+      expensesOk && Number.isFinite(variableAgg.totalReporting)
+        ? formatConvertDisplay(
+            variableAgg.totalReporting,
+            reportingCode,
+            incomeCode
+          )
+        : '—';
   }
   if (totalSubsEquivEl) {
-    totalSubsEquivEl.textContent = formatConvertDisplay(
-      totalSubsMonthly,
-      expenseCode,
-      incomeCode
-    );
+    totalSubsEquivEl.textContent =
+      expensesOk && Number.isFinite(subsAgg.totalReporting)
+        ? formatConvertDisplay(subsAgg.totalReporting, reportingCode, incomeCode)
+        : '—';
   }
 
-  refreshExpenseTableEquiv(fixedExpensesBody);
-  refreshExpenseTableEquiv(variableExpensesBody);
-  refreshExpenseTableEquiv(subscriptionsBody);
+  refreshExpenseTableDisplay(fixedExpensesBody);
+  refreshExpenseTableDisplay(variableExpensesBody);
+  refreshExpenseTableDisplay(subscriptionsBody);
 
   updateCurrencyHeaders();
   updateRateHints();
@@ -1171,63 +1408,50 @@ function recomputeAll() {
 
 function onCurrencyChange() {
   saveCurrencyPreferences();
+  // Reporting / income currency change must NOT reinterpret native expense amounts.
   updateCurrencyHeaders();
-  reformatAllAmountInputs();
+  if (salaryAmountInput && salaryAmountInput.formatAmountValue) {
+    salaryAmountInput.formatAmountValue();
+  }
   recomputeAll();
 }
 
-addFixedExpenseBtn.addEventListener('click', () => {
-  createExpenseRow(fixedExpensesBody);
-});
-
-addVariableExpenseBtn.addEventListener('click', () => {
-  createExpenseRow(variableExpensesBody);
-});
-
-addSubscriptionBtn.addEventListener('click', () => {
-  createExpenseRow(subscriptionsBody);
-});
+if (addFixedExpenseBtn) {
+  addFixedExpenseBtn.addEventListener('click', () => {
+    createExpenseRow(fixedExpensesBody);
+  });
+}
+if (addVariableExpenseBtn) {
+  addVariableExpenseBtn.addEventListener('click', () => {
+    createExpenseRow(variableExpensesBody);
+  });
+}
+if (addSubscriptionBtn) {
+  addSubscriptionBtn.addEventListener('click', () => {
+    createExpenseRow(subscriptionsBody);
+  });
+}
+if (addSplitCategoryBtn) {
+  addSplitCategoryBtn.addEventListener('click', addSplitCategory);
+}
 
 attachAmountInputFormatting(
   salaryAmountInput,
   () => getCurrencyMeta(getIncomeCurrency()).decimals
 );
 
-salaryAmountInput.addEventListener('input', recomputeAll);
-salaryFrequencySelect.addEventListener('change', recomputeAll);
-percentageInputs.forEach((input) => {
-  input.addEventListener('input', recomputeAll);
-});
-
+if (salaryAmountInput) {
+  salaryAmountInput.addEventListener('input', recomputeAll);
+}
+if (salaryFrequencySelect) {
+  salaryFrequencySelect.addEventListener('change', recomputeAll);
+}
 if (incomeCurrencySelect) {
   incomeCurrencySelect.addEventListener('change', onCurrencyChange);
 }
 if (expenseCurrencySelect) {
   expenseCurrencySelect.addEventListener('change', onCurrencyChange);
 }
-
-['Rent / Mortgage', 'Groceries', 'Electricity', 'Internet', 'Water', 'Mobile phone'].forEach(
-  (name) => {
-    createExpenseRow(fixedExpensesBody, {
-      name,
-      frequency: 'monthly',
-    });
-  }
-);
-
-['Dining out', 'Entertainment', 'Transport (pay-as-you-go)'].forEach((name) => {
-  createExpenseRow(variableExpensesBody, {
-    name,
-    frequency: 'monthly',
-  });
-});
-
-['TV streaming', 'Music streaming', 'Gym membership'].forEach((name) => {
-  createExpenseRow(subscriptionsBody, {
-    name,
-    frequency: 'monthly',
-  });
-});
 
 function getScenariosStore() {
   try {
@@ -1252,36 +1476,36 @@ function setScenarioStatus(msg) {
 }
 
 function collectScenarioData() {
+  syncSplitsFromDom();
   const rowsFrom = (tbody) => {
     const out = [];
     if (!tbody) return out;
-    tbody.querySelectorAll('tr').forEach((tr) => {
-      const nameInput = tr.querySelector('td:nth-child(1) input');
-      const freqSelect = tr.querySelector('td:nth-child(2) select');
-      const amtInput = tr.querySelector('td:nth-child(3) input');
+    tbody.querySelectorAll('tr.expense-row').forEach((tr) => {
+      const nameInput = tr.querySelector('.expense-name-input');
+      const freqSelect = tr.querySelector('.expense-freq-select');
+      const currencySelect = tr.querySelector('.expense-currency-select');
+      const amtInput = tr.querySelector('.expense-amount-input');
       if (!nameInput || !freqSelect || !amtInput) return;
       out.push({
         name: nameInput.value,
         frequency: freqSelect.value,
         amount: amtInput.value,
+        currency:
+          (currencySelect && currencySelect.value) || getReportingCurrency(),
       });
     });
     return out;
   };
-  const pct = {};
-  document.querySelectorAll('.percentage-input').forEach((inp) => {
-    const k = inp.dataset.percentageInput;
-    if (k) pct[k] = inp.value;
-  });
+
   return {
     salaryAmount: salaryAmountInput.value,
     salaryFrequency: salaryFrequencySelect.value,
     incomeCurrency: getIncomeCurrency(),
-    expenseCurrency: getExpenseCurrency(),
+    expenseCurrency: getReportingCurrency(),
     fixed: rowsFrom(fixedExpensesBody),
     variable: rowsFrom(variableExpensesBody),
     subs: rowsFrom(subscriptionsBody),
-    percentages: pct,
+    splits: currentSplits.map((s) => ({ ...s })),
   };
 }
 
@@ -1321,7 +1545,11 @@ function refreshScenarioUI(options = {}) {
 
     if (selectId) {
       scenarioLoadSelect.value = selectId;
-    } else if (hasScenarios && previous && store.scenarios.some((s) => s.id === previous)) {
+    } else if (
+      hasScenarios &&
+      previous &&
+      store.scenarios.some((s) => s.id === previous)
+    ) {
       scenarioLoadSelect.value = previous;
     } else if (hasScenarios) {
       scenarioLoadSelect.value = store.scenarios[store.scenarios.length - 1].id;
@@ -1435,34 +1663,32 @@ function deleteSelectedScenario() {
   }
 }
 
-function applyScenarioData(data) {
+function applyScenarioData(rawData) {
+  const data = Core ? Core.migrateScenarioData(rawData) : rawData;
   if (!data) return;
+
   salaryAmountInput.value = data.salaryAmount ?? '';
   if (salaryAmountInput.formatAmountValue) salaryAmountInput.formatAmountValue();
   salaryFrequencySelect.value = data.salaryFrequency || 'monthly';
 
   let incomeCode = data.incomeCurrency;
   let expenseCode = data.expenseCurrency;
-  if (incomeCode == null && expenseCode == null) {
-    incomeCode = 'VND';
-    expenseCode = 'VND';
-  } else {
-    if (!isSupportedCurrency(incomeCode)) incomeCode = DEFAULT_INCOME_CURRENCY;
-    if (!isSupportedCurrency(expenseCode)) expenseCode = DEFAULT_EXPENSE_CURRENCY;
-  }
+  if (!isSupportedCurrency(incomeCode)) incomeCode = DEFAULT_INCOME_CURRENCY;
+  if (!isSupportedCurrency(expenseCode)) expenseCode = DEFAULT_EXPENSE_CURRENCY;
 
   if (incomeCurrencySelect) incomeCurrencySelect.value = incomeCode;
   if (expenseCurrencySelect) expenseCurrencySelect.value = expenseCode;
   saveCurrencyPreferences();
 
-  function fillTable(tbody, rows, addFn) {
+  function fillTable(tbody, rows) {
     if (!tbody) return;
     tbody.innerHTML = '';
     if (rows && rows.length) {
       rows.forEach((r) => {
-        addFn(tbody, {
+        createExpenseRow(tbody, {
           name: r.name || '',
           frequency: r.frequency || 'monthly',
+          currency: r.currency || expenseCode,
           amount:
             r.amount !== undefined && r.amount !== ''
               ? parseAmount(r.amount)
@@ -1470,20 +1696,19 @@ function applyScenarioData(data) {
         });
       });
     } else {
-      addFn(tbody, {});
+      createExpenseRow(tbody, { currency: expenseCode });
     }
   }
 
-  fillTable(fixedExpensesBody, data.fixed, createExpenseRow);
-  fillTable(variableExpensesBody, data.variable, createExpenseRow);
-  fillTable(subscriptionsBody, data.subs, createExpenseRow);
+  fillTable(fixedExpensesBody, data.fixed);
+  fillTable(variableExpensesBody, data.variable);
+  fillTable(subscriptionsBody, data.subs);
 
-  if (data.percentages) {
-    Object.entries(data.percentages).forEach(([k, v]) => {
-      const inp = document.querySelector(`[data-percentage-input="${k}"]`);
-      if (inp) inp.value = v;
-    });
+  currentSplits = (data.splits || []).map((s) => ({ ...s }));
+  if (!currentSplits.length && Core) {
+    currentSplits = Core.cloneDefaultSplits();
   }
+  renderBudgetSplits();
   recomputeAll();
 }
 
@@ -1494,29 +1719,54 @@ function initScenarioUI() {
   }
 }
 
+function seedDefaultRows() {
+  if (fixedExpensesBody && fixedExpensesBody.children.length === 0) {
+    [
+      'Rent / Mortgage',
+      'Groceries',
+      'Electricity',
+      'Internet',
+      'Water',
+      'Mobile phone',
+    ].forEach((name) => {
+      createExpenseRow(fixedExpensesBody, { name, frequency: 'monthly' });
+    });
+  }
+  if (variableExpensesBody && variableExpensesBody.children.length === 0) {
+    ['Dining out', 'Entertainment', 'Transport (pay-as-you-go)'].forEach(
+      (name) => {
+        createExpenseRow(variableExpensesBody, { name, frequency: 'monthly' });
+      }
+    );
+  }
+  if (subscriptionsBody && subscriptionsBody.children.length === 0) {
+    ['TV streaming', 'Music streaming', 'Gym membership'].forEach((name) => {
+      createExpenseRow(subscriptionsBody, { name, frequency: 'monthly' });
+    });
+  }
+}
+
 populateCurrencySelects();
+renderBudgetSplits();
 initScenarioUI();
+
+const store = getScenariosStore();
+if (!store.scenarios.length) {
+  seedDefaultRows();
+}
+
 updateCurrencyHeaders();
+recomputeAll();
+loadExchangeRates();
 
 if (scenarioSaveBtn) scenarioSaveBtn.addEventListener('click', saveScenario);
 if (scenarioNewBtn) scenarioNewBtn.addEventListener('click', showCreateScenario);
-if (scenarioCancelBtn) scenarioCancelBtn.addEventListener('click', cancelCreateScenario);
+if (scenarioCancelBtn) {
+  scenarioCancelBtn.addEventListener('click', cancelCreateScenario);
+}
 if (scenarioLoadSelect) {
-  scenarioLoadSelect.addEventListener('change', () => {
-    loadSelectedScenario();
-  });
+  scenarioLoadSelect.addEventListener('change', () => loadSelectedScenario());
 }
 if (scenarioDeleteBtn) {
   scenarioDeleteBtn.addEventListener('click', deleteSelectedScenario);
-}
-if (scenarioNameInput) {
-  scenarioNameInput.addEventListener('keydown', (e) => {
-    if (e.key === 'Enter') saveScenario();
-  });
-}
-
-recomputeAll();
-
-if (!vndRatesCache && !ratesLoading) {
-  loadExchangeRates();
 }

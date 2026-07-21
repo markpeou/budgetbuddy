@@ -4,6 +4,7 @@
   "version": "0.1.0",
   "scripts": {
     "dev": "python3 -m http.server 5180",
-    "preview": "python3 -m http.server 5180"
+    "preview": "python3 -m http.server 5180",
+    "test": "node tests/budget-core.test.js && node --check budget-core.js && node --check script.js"
   }
 }
