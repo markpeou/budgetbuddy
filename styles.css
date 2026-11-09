@@ -2312,3 +2312,13 @@ td .money-input-wrap {
     max-width: none;
   }
 }
+
+/* iOS Safari zooms the page when a field under 16px is tapped. Every field
+   is 16px on phones so tapping never zooms; pinch-zoom still works. */
+@media (max-width: 900px) {
+  input:not([type='radio']):not([type='checkbox']),
+  select,
+  textarea {
+    font-size: 16px !important;
+  }
+}
