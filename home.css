@@ -1318,3 +1318,203 @@ body:not([data-view='app']) {
   font-size: 15px;
   font-weight: 600;
 }
+
+/* ------------------------------------------------------------------ */
+/* Icons and empty states                                              */
+/* ------------------------------------------------------------------ */
+
+.tool-head {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 8px;
+}
+
+.tool-head .tool-kicker {
+  margin: 0;
+}
+
+.tool-empty {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  padding: 32px 24px;
+  border-radius: var(--radius-xl);
+  border: 1.5px dashed #d9d0ec;
+  background: rgba(255, 255, 255, 0.6);
+  text-align: center;
+}
+
+.tool-empty[hidden],
+.tool-answer[hidden] {
+  display: none;
+}
+
+.tool-empty-art {
+  width: 140px;
+  height: auto;
+  margin-bottom: 12px;
+  color: var(--color-brand-primary);
+}
+
+.tool-empty-art .node {
+  fill: var(--color-bg-calm);
+  stroke: currentColor;
+  stroke-width: 2;
+}
+
+.tool-empty-art .node--start {
+  fill: currentColor;
+}
+
+.tool-empty-art .node--empty {
+  stroke-dasharray: 3 3;
+  opacity: 0.6;
+}
+
+.tool-empty-title {
+  margin: 0;
+  font-size: 22px;
+  font-weight: 700;
+  letter-spacing: -0.02em;
+  color: var(--text);
+}
+
+.tool-empty-text {
+  margin: 6px 0 0;
+  max-width: 36ch;
+  color: var(--muted);
+  font-size: 16px;
+  line-height: 1.5;
+}
+
+.tool-empty-link {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 44px;
+  margin-top: 18px;
+  padding: 0 20px;
+  border-radius: 999px;
+  background: var(--color-brand-primary);
+  color: var(--color-text-on-brand);
+  font-size: 15px;
+  font-weight: 600;
+  text-decoration: none;
+}
+
+.tool-empty-link[hidden] {
+  display: none;
+}
+
+.tool-empty-link:hover {
+  background: var(--color-brand-primary-hover);
+}
+
+.tool-columns.is-single {
+  grid-template-columns: minmax(0, 1fr);
+  max-width: 620px;
+}
+
+/* Calculator cards */
+.tool-card .icon-chip {
+  margin-bottom: 8px;
+}
+
+/* Journey groups */
+.journey-group-title {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.journey-group-desc {
+  margin-left: 42px;
+}
+
+.journey-meta {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.journey-meta-icon,
+.question-icon {
+  display: inline-flex;
+  flex-shrink: 0;
+  color: var(--color-brand-primary);
+}
+
+.journey-meta-icon .icon {
+  width: 16px;
+  height: 16px;
+}
+
+/* Questions: icon of the calculator each one opens */
+.question-link {
+  justify-content: flex-start;
+}
+
+.question-icon {
+  width: 32px;
+  height: 32px;
+  align-items: center;
+  justify-content: center;
+  border-radius: 10px;
+  background: var(--color-brand-primary-soft);
+}
+
+.question-text {
+  flex: 1 1 auto;
+}
+
+/* Trust: icon + two short lines */
+.trust-list li {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+}
+
+.trust-icon {
+  display: inline-flex;
+  flex-shrink: 0;
+  align-items: center;
+  justify-content: center;
+  width: 36px;
+  height: 36px;
+  border-radius: 12px;
+  background: var(--color-brand-tint);
+  color: var(--color-brand-primary);
+}
+
+@media (max-width: 900px) {
+  .tool-empty {
+    padding: 28px 18px;
+  }
+
+  .tool-empty-link {
+    align-self: stretch;
+  }
+
+  .journey-group-desc {
+    margin-left: 0;
+  }
+}
+
+/* Whole calculator card is the link; a quiet arrow instead of repeating "Open". */
+.tool-card {
+  position: relative;
+}
+
+.tool-arrow {
+  position: absolute;
+  top: 20px;
+  right: 20px;
+  color: var(--color-brand-primary);
+  font-size: 18px;
+  transition: transform 0.16s ease;
+}
+
+.tool-card:hover .tool-arrow {
+  transform: translateX(3px);
+}

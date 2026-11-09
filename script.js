@@ -887,7 +887,7 @@ function syncSplitsFromDom() {
     if (labelInput && !split.required) {
       split.label = labelInput.value.trim() || split.label;
     }
-    if (pctInput) {
+    if (pctInput && pctInput.value.trim() !== '') {
       const raw = parseAmount(pctInput.value);
       split.percent = Math.max(0, Math.min(100, raw));
     }
@@ -947,9 +947,36 @@ function renderBudgetSplits() {
     pctInput.max = '100';
     pctInput.value = String(split.percent);
     pctInput.setAttribute('aria-label', `${split.label} percentage`);
+    // Always 100%: changing one category scales the others to fill the rest,
+    // measured from the split as it was when editing started.
+    let baseline = null;
+    pctInput.addEventListener('focus', () => {
+      baseline = currentSplits.map((s) => ({ ...s }));
+    });
     pctInput.addEventListener('input', () => {
-      syncSplitsFromDom();
+      if (!Core || !Core.balanceSplits) {
+        syncSplitsFromDom();
+        recomputeAll();
+        return;
+      }
+      if (!baseline) baseline = currentSplits.map((s) => ({ ...s }));
+      if (pctInput.value.trim() === '') return; // let them clear the field while typing
+      const idx = baseline.findIndex((s) => s.id === split.id);
+      const next = Core.balanceSplits(baseline, idx, parseAmount(pctInput.value));
+      currentSplits.forEach((s, i) => {
+        s.percent = next[i];
+      });
+      budgetSplitBody.querySelectorAll('tr[data-split-id]').forEach((row) => {
+        const s = currentSplits.find((x) => x.id === row.dataset.splitId);
+        const inp = row.querySelector('.percentage-input');
+        if (!s || !inp) return;
+        if (inp !== pctInput || Number(pctInput.value) !== s.percent) inp.value = String(s.percent);
+      });
       recomputeAll();
+    });
+    pctInput.addEventListener('blur', () => {
+      baseline = null;
+      pctInput.value = String(split.percent);
     });
     pctTd.appendChild(pctInput);
     pctTd.appendChild(document.createTextNode('%'));
@@ -987,6 +1014,7 @@ function renderBudgetSplits() {
       removeBtn.innerHTML = icon('trash', { size: 16, className: 'icon icon--sm' });
       removeBtn.addEventListener('click', () => {
         currentSplits = currentSplits.filter((s) => s.id !== split.id);
+        normalizeCurrentSplits();
         renderBudgetSplits();
         recomputeAll();
       });
@@ -1003,6 +1031,15 @@ function renderBudgetSplits() {
   });
 
   updateDualColumnVisibility();
+}
+
+/** Keep the split at exactly 100% (old scenarios, removed categories). */
+function normalizeCurrentSplits() {
+  if (!Core || !Core.normalizeSplits || !currentSplits.length) return;
+  const pcts = Core.normalizeSplits(currentSplits);
+  currentSplits.forEach((s, i) => {
+    s.percent = pcts[i];
+  });
 }
 
 function addSplitCategory() {
@@ -1078,7 +1115,7 @@ function updatePercentages(incomePerMonthVnd, totalExpensesVnd, expensesOk) {
 
   if (splitValidationHintEl) {
     if (validation.status === 'exact') {
-      splitValidationHintEl.textContent = 'Ready — totals 100%';
+      splitValidationHintEl.textContent = ''; // the total already says 100%
       splitValidationHintEl.className = 'split-validation hint split-validation--ok';
     } else if (validation.status === 'under') {
       splitValidationHintEl.textContent = `${validation.remainder}% still unallocated`;
@@ -1967,6 +2004,7 @@ function applyScenarioData(rawData) {
   if (!currentSplits.length && Core) {
     currentSplits = Core.cloneDefaultSplits();
   }
+  normalizeCurrentSplits();
   renderBudgetSplits();
   recomputeAll();
 }
@@ -2146,12 +2184,13 @@ function updateSavePrompt() {
   document.getElementById('savePromptChanged').hidden = !sc;
   if (sc) {
     title.textContent = `You’ve changed “${sc.name}”`;
-    sub.textContent = 'Your changes are kept in this browser. Update the scenario, or keep both versions.';
+    sub.textContent = '';
     document.getElementById('savePromptUpdate').textContent = `Update “${sc.name}”`;
   } else {
     title.textContent = 'Keep this budget';
-    sub.textContent = 'Give it a name to save it as a scenario. Come back to it any time, or compare versions.';
+    sub.textContent = 'Name it to come back to it, or to compare versions.';
   }
+  sub.hidden = !sub.textContent;
 }
 
 function flashScenarioSaved(msg) {
@@ -2182,7 +2221,7 @@ if (savePromptEl) {
     draftEdited = true;
     saveDraftNow();
     updateSavePrompt();
-    flashScenarioSaved(`Saved as “${name}”. It’ll be here next time.`);
+    flashScenarioSaved(`Saved as “${name}”.`);
   });
   document.getElementById('savePromptUpdate').addEventListener('click', () => {
     const sc = selectedScenario();

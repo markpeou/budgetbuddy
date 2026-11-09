@@ -119,3 +119,16 @@ ok('bad inputs never throw or go negative', () => {
   assert.strictEqual(J.runway({ savings: -5, costs: NaN }).months, Infinity);
   assert.strictEqual(J.monthsUntil('nope'), null);
 });
+
+ok('runway end date counts from today, using the exact months', () => {
+  const today = new Date(2026, 10, 9); // 9 Nov 2026
+  const r = J.runway({ savings: 30000, costs: 3898 });
+  assert.strictEqual(r.months, 7);
+  assert.ok(Math.abs(r.exactMonths - 7.696) < 0.001);
+  const end = J.dateAfter(r.exactMonths, today);
+  assert.strictEqual(end.getFullYear(), 2027);
+  // 7.7 months ≈ 234 days → 1 July 2027 (whole months alone said "June").
+  assert.strictEqual(end.getMonth(), 6);
+  assert.strictEqual(end.getDate(), 1);
+  assert.strictEqual(J.dateAfter(Infinity, today), null);
+});

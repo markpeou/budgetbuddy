@@ -468,8 +468,72 @@
     return { code, share: total ? weights.get(code) / total : 0, basis: canValue ? 'value' : 'count' };
   }
 
+  /**
+   * Whole-number percentages that add up to exactly 100 (largest remainder).
+   * @param {number[]} weights  non-negative; all zero → equal shares
+   */
+  function toHundred(weights) {
+    const w = weights.map((x) => (Number.isFinite(x) && x > 0 ? x : 0));
+    const sum = w.reduce((a, b) => a + b, 0);
+    if (!w.length) return [];
+    const raw = sum > 0 ? w.map((x) => (x / sum) * 100) : w.map(() => 100 / w.length);
+    const out = raw.map(Math.floor);
+    let left = 100 - out.reduce((a, b) => a + b, 0);
+    raw
+      .map((x, i) => [x - Math.floor(x), i])
+      .sort((a, b) => b[0] - a[0])
+      .forEach(([, i]) => {
+        if (left > 0) {
+          out[i] += 1;
+          left -= 1;
+        }
+      });
+    return out;
+  }
+
+  /**
+   * Keep the split at 100%: set one category, and scale the others in
+   * proportion to fill what's left. `baseline` is the split before the edit
+   * started, so typing 6 → 60 doesn't compound.
+   * @returns {number[]} new percents, same order as `baseline`
+   */
+  function balanceSplits(baseline, changedIndex, newPercent) {
+    const pcts = baseline.map((s) => Math.max(0, Number(s.percent) || 0));
+    if (pcts.length === 1) return [100];
+    const target = Math.round(Math.max(0, Math.min(100, Number(newPercent) || 0)));
+    const others = pcts.filter((_, i) => i !== changedIndex);
+    const shares = toHundred(others).map((x) => x / 100);
+    const rest = 100 - target;
+    // Distribute `rest` by the others' current proportions, in whole numbers.
+    const scaled = shares.map((x) => x * rest);
+    const whole = scaled.map(Math.floor);
+    let left = rest - whole.reduce((a, b) => a + b, 0);
+    scaled
+      .map((x, i) => [x - Math.floor(x), i])
+      .sort((a, b) => b[0] - a[0])
+      .forEach(([, i]) => {
+        if (left > 0) {
+          whole[i] += 1;
+          left -= 1;
+        }
+      });
+    const out = [];
+    let k = 0;
+    for (let i = 0; i < pcts.length; i++) out.push(i === changedIndex ? target : whole[k++]);
+    return out;
+  }
+
+  /** Bring any split (old scenario, deleted category) back to exactly 100%. */
+  function normalizeSplits(splits) {
+    const total = (splits || []).reduce((a, s) => a + (Number(s.percent) || 0), 0);
+    if (Math.round(total) === 100 && splits.every((s) => Number.isInteger(Number(s.percent)))) return splits.map((s) => s.percent);
+    return toHundred(splits.map((s) => Number(s.percent) || 0));
+  }
+
   return {
     DEFAULT_SPLITS,
+    balanceSplits,
+    normalizeSplits,
     ACTIVE_CURRENCIES,
     COMMON_CURRENCIES,
     buildCurrencyCatalog,

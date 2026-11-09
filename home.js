@@ -25,48 +25,51 @@
   // ---------------------------------------------------------------------------
 
   const CALCULATORS = [
-    { to: 'go/income', name: 'Budget planner', answer: 'Income, costs and your savings split, in any currency. The figures every other calculator can use.' },
-    { to: 'tool/breakdown', name: 'Spending breakdown', answer: 'Which costs take the biggest share, and how much is flexible.' },
-    { to: 'tool/capacity', name: 'Savings capacity', answer: 'What’s genuinely left to save each month and each year.' },
-    { to: 'tool/snapshot', name: 'Money snapshot', answer: 'Savings rate, fixed costs, biggest cost and runway at a glance.' },
-    { to: 'tool/emergency', name: 'Emergency fund', answer: 'A target for 3, 6 or 12 months of essentials, and when you’ll get there.' },
-    { to: 'tool/runway', name: 'Financial runway', answer: 'How many months your savings would last without an income.' },
-    { to: 'tool/goal', name: 'Savings goal', answer: 'When you’ll reach a target, or what it takes to hit a deadline.' },
-    { to: 'tool/income', name: 'Income change', answer: 'What’s left each month if your income goes down, or you switch careers.' },
+    { to: 'go/income', name: 'Budget planner', icon: 'wallet', answer: 'Income, costs and savings in any currency. Feeds every calculator.' },
+    { to: 'tool/breakdown', name: 'Spending breakdown', icon: 'chart-pie', answer: 'Your costs ranked, fixed vs flexible.' },
+    { to: 'tool/capacity', name: 'Savings capacity', icon: 'coins', answer: 'What’s left to save each month and year.' },
+    { to: 'tool/snapshot', name: 'Money snapshot', icon: 'activity', answer: 'Your finances at a glance.' },
+    { to: 'tool/emergency', name: 'Emergency fund', icon: 'life-buoy', answer: 'Your target, and when you’ll reach it.' },
+    { to: 'tool/runway', name: 'Financial runway', icon: 'hourglass', answer: 'How long your savings would last.' },
+    { to: 'tool/goal', name: 'Savings goal', icon: 'target', answer: 'When you’ll get there, or what it takes.' },
+    { to: 'tool/income', name: 'Income change', icon: 'trending-down', answer: 'What a pay cut or career switch means.' },
   ];
 
   // Opening the budget planner directly, with guidance.
   const GO = {
-    income: { tab: 'income', q: 'Budget planner', guide: 'Enter your income, then add your costs step by step. Summary shows what’s left.' },
+    income: { tab: 'income', q: 'Budget planner', guide: 'Add your income, then your costs.' },
   };
 
   const JOURNEYS = [
     {
       title: 'Understand my money',
-      desc: 'Get a clear picture of what comes in, what goes out and what’s left.',
+      icon: 'compass',
+      desc: 'What comes in, goes out and is left.',
       items: [
-        { q: 'Where does my money go each month?', d: 'See your costs ranked, and which ones you can actually change.', to: 'tool/breakdown' },
-        { q: 'How much can I realistically save?', d: 'What’s genuinely left after every cost, per month and per year.', to: 'tool/capacity' },
-        { q: 'What does my financial situation look like?', d: 'Four plain readings: savings rate, fixed costs, biggest cost and runway.', to: 'tool/snapshot' },
+        { q: 'Where does my money go each month?', d: 'Your costs ranked, and which you can change.', to: 'tool/breakdown' },
+        { q: 'How much can I realistically save?', d: 'What’s really left after every cost.', to: 'tool/capacity' },
+        { q: 'What does my financial situation look like?', d: 'Savings rate, fixed costs and runway.', to: 'tool/snapshot' },
       ],
     },
     {
       title: 'Build my financial safety net',
-      desc: 'Work out what a buffer looks like for you, and how to get there.',
+      icon: 'shield',
+      desc: 'A buffer that fits your life.',
       items: [
-        { q: 'How much should I have in an emergency fund?', d: 'A target from your essential costs, and when you’ll reach it.', to: 'tool/emergency' },
-        { q: 'How long could I manage without an income?', d: 'How many months your savings would cover, and with essentials only.', to: 'tool/runway' },
-        { q: 'How can I reach my savings goal?', d: 'When you’ll get there, or what to save each month to hit a date.', to: 'tool/goal' },
+        { q: 'How much should I have in an emergency fund?', d: 'A target, and when you’ll reach it.', to: 'tool/emergency' },
+        { q: 'How long could I manage without an income?', d: 'How many months your savings cover.', to: 'tool/runway' },
+        { q: 'How can I reach my savings goal?', d: 'When you’ll get there.', to: 'tool/goal' },
       ],
     },
     {
       title: 'Plan a big life change',
+      icon: 'route',
       desc: 'Test a change before you make it.',
       items: [
-        { q: 'Could I afford to take six months off?', d: 'Yes or no, and how much you’d have left or need to save.', to: 'tool/runway/timeoff' },
-        { q: 'What happens if my income decreases?', d: 'What’s left each month on a lower income, and for how long savings cover a gap.', to: 'tool/income' },
-        { q: 'Could I afford to change careers?', d: 'The cost of the switch, and when a new salary puts you ahead.', to: 'tool/income/career' },
-        { q: 'What would happen if I lost my job?', d: 'How long your savings and any payout would last.', to: 'tool/runway/jobloss' },
+        { q: 'Could I afford to take six months off?', d: 'Yes or no, and by how much.', to: 'tool/runway/timeoff' },
+        { q: 'What happens if my income decreases?', d: 'What’s left on a lower income.', to: 'tool/income' },
+        { q: 'Could I afford to change careers?', d: 'The cost, and when you’d be ahead.', to: 'tool/income/career' },
+        { q: 'What would happen if I lost my job?', d: 'How long your savings would last.', to: 'tool/runway/jobloss' },
       ],
     },
   ];
@@ -79,6 +82,21 @@
     { q: 'Could I afford to work less?', to: 'tool/income/less' },
     { q: 'How much income do I need to cover my expenses?', to: 'tool/capacity/needed' },
   ];
+
+  /** Icon (from the sprite) inside a span, decorative. */
+  function iconEl(name, cls) {
+    const span = document.createElement('span');
+    span.className = cls;
+    span.setAttribute('aria-hidden', 'true');
+    span.innerHTML = typeof icon === 'function' ? icon(name || 'compass', { size: 18 }) : '';
+    return span;
+  }
+
+  function toolIcon(to) {
+    const id = to.split('/')[1];
+    const t = window.BudgetTools && window.BudgetTools.TOOLS[id];
+    return t ? t.icon : 'wallet';
+  }
 
   /** Name of the calculator a link opens, for "Uses …" labels. */
   function toolName(to) {
@@ -107,6 +125,7 @@
       const li = el('li');
       const a = el('a', 'question-link');
       a.href = hrefFor(item);
+      a.appendChild(iconEl(toolIcon(item.to), 'question-icon'));
       a.appendChild(el('span', 'question-text', item.q));
       a.appendChild(el('span', 'question-arrow', '→')).setAttribute('aria-hidden', 'true');
       li.appendChild(a);
@@ -119,7 +138,9 @@
     if (!root) return;
     JOURNEYS.forEach((group, gi) => {
       const sec = el('section', 'journey-group');
-      const h = el('h2', 'journey-group-title', group.title);
+      const h = el('h2', 'journey-group-title');
+      h.appendChild(iconEl(group.icon, 'icon-chip icon-chip--purple'));
+      h.appendChild(document.createTextNode(group.title));
       h.id = `journeyGroup${gi}`;
       sec.setAttribute('aria-labelledby', h.id);
       sec.appendChild(h);
@@ -132,7 +153,8 @@
         a.appendChild(el('h3', 'journey-q', item.q));
         a.appendChild(el('p', 'journey-d', item.d));
         const meta = el('span', 'journey-meta');
-        meta.textContent = `Uses ${toolName(item.to)} →`;
+        meta.appendChild(iconEl(toolIcon(item.to), 'journey-meta-icon'));
+        meta.appendChild(document.createTextNode(`${toolName(item.to)} →`));
         a.appendChild(meta);
         li.appendChild(a);
         ul.appendChild(li);
@@ -149,9 +171,10 @@
       const li = el('li');
       const a = el('a', 'tool-card' + (tool.to === 'go/income' ? ' tool-card--planner' : ''));
       a.href = `#${tool.to}`;
+      a.appendChild(iconEl(tool.icon, 'icon-chip icon-chip--purple'));
       a.appendChild(el('h2', 'tool-name', tool.name));
       a.appendChild(el('p', 'tool-desc', tool.answer));
-      a.appendChild(el('span', 'tool-open', 'Open →'));
+      a.appendChild(el('span', 'tool-arrow', '→')).setAttribute('aria-hidden', 'true');
       li.appendChild(a);
       list.appendChild(li);
     });
@@ -205,7 +228,7 @@
     } catch (e) {
       /* ignore */
     }
-    if (ret && ret.hash) showBanner(ret.q, 'Update your income and costs here, then go back to see your answer.', ret.hash);
+    if (ret && ret.hash) showBanner(ret.q, 'Update your budget, then go back to your answer.', ret.hash);
     else showBanner(g.q, g.guide);
     requestAnimationFrame(() => scrollToTarget(g));
   }

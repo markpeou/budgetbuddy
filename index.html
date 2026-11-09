@@ -12,8 +12,8 @@
       href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700&display=swap"
       rel="stylesheet"
     />
-    <link rel="stylesheet" href="./styles.css?v=20261109x" />
-    <link rel="stylesheet" href="./home.css?v=20261109x" />
+    <link rel="stylesheet" href="./styles.css?v=20261109z" />
+    <link rel="stylesheet" href="./home.css?v=20261109z" />
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
   </head>
   <body data-view="home">
@@ -119,6 +119,17 @@
         <line x1="10" x2="10" y1="11" y2="17" />
         <line x1="14" x2="14" y1="11" y2="17" />
       </symbol>
+      <symbol id="icon-coins" viewBox="0 0 24 24"><circle cx="8" cy="8" r="6"/><path d="M18.09 10.37A6 6 0 1 1 10.34 18"/><path d="M7 6h1v4"/><path d="m16.71 13.88.7.71-2.82 2.82"/></symbol>
+      <symbol id="icon-activity" viewBox="0 0 24 24"><path d="M22 12h-4l-3 9L9 3l-3 9H2"/></symbol>
+      <symbol id="icon-life-buoy" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><circle cx="12" cy="12" r="4"/><path d="m4.93 4.93 4.24 4.24"/><path d="m14.83 9.17 4.24-4.24"/><path d="m14.83 14.83 4.24 4.24"/><path d="m9.17 14.83-4.24 4.24"/></symbol>
+      <symbol id="icon-hourglass" viewBox="0 0 24 24"><path d="M5 22h14"/><path d="M5 2h14"/><path d="M17 22v-4.17a2 2 0 0 0-.59-1.42L12 12l-4.41 4.41A2 2 0 0 0 7 17.83V22"/><path d="M7 2v4.17a2 2 0 0 0 .59 1.42L12 12l4.41-4.41A2 2 0 0 0 17 6.17V2"/></symbol>
+      <symbol id="icon-target" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><circle cx="12" cy="12" r="6"/><circle cx="12" cy="12" r="2"/></symbol>
+      <symbol id="icon-trending-down" viewBox="0 0 24 24"><polyline points="22 17 13.5 8.5 8.5 13.5 2 7"/><polyline points="16 17 22 17 22 11"/></symbol>
+      <symbol id="icon-compass" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><polygon points="16.24 7.76 14.12 14.12 7.76 16.24 9.88 9.88 16.24 7.76"/></symbol>
+      <symbol id="icon-route" viewBox="0 0 24 24"><circle cx="6" cy="19" r="3"/><path d="M9 19h8.5a3.5 3.5 0 0 0 0-7h-11a3.5 3.5 0 0 1 0-7H15"/><circle cx="18" cy="5" r="3"/></symbol>
+      <symbol id="icon-user" viewBox="0 0 24 24"><circle cx="12" cy="8" r="5"/><path d="M20 21a8 8 0 0 0-16 0"/></symbol>
+      <symbol id="icon-eye" viewBox="0 0 24 24"><path d="M2 12s3-7 10-7 10 7 10 7-3 7-10 7-10-7-10-7Z"/><circle cx="12" cy="12" r="3"/></symbol>
+      <symbol id="icon-lock" viewBox="0 0 24 24"><rect width="18" height="11" x="3" y="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></symbol>
     </svg>
 
     <div class="app">
@@ -214,10 +225,10 @@
         <section class="home-trust" aria-labelledby="trustTitle">
           <h2 class="home-section-title" id="trustTitle">Your finances. Your decisions. Your data.</h2>
           <ul class="trust-list">
-            <li><strong>No account needed.</strong> Every calculator works straight away, without signing up.</li>
-            <li><strong>Clear, transparent maths.</strong> See <a href="#about">how the numbers work</a> and the assumptions behind them.</li>
-            <li><strong>Your information isn’t for sale.</strong> What you enter stays in this browser. We never sell it.</li>
-            <li><strong>Options, not instructions.</strong> Designed to help you understand your choices, not tell you what to do.</li>
+            <li><span class="trust-icon" aria-hidden="true"><svg class="icon" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><use href="#icon-user"/></svg></span><span><strong>No account</strong>Every calculator works straight away.</span></li>
+            <li><span class="trust-icon" aria-hidden="true"><svg class="icon" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><use href="#icon-eye"/></svg></span><span><strong>Open maths</strong><a href="#about">See how the numbers work.</a></span></li>
+            <li><span class="trust-icon" aria-hidden="true"><svg class="icon" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><use href="#icon-lock"/></svg></span><span><strong>Private</strong>Your data stays in this browser.</span></li>
+            <li><span class="trust-icon" aria-hidden="true"><svg class="icon" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><use href="#icon-compass"/></svg></span><span><strong>Your call</strong>Options, not instructions.</span></li>
           </ul>
         </section>
       </main>
@@ -225,20 +236,23 @@
       <main class="site-view view-list" id="view-journeys" data-view="journeys" aria-labelledby="journeysTitle">
         <a class="back-link" href="#home">← Home</a>
         <h1 class="page-title" id="journeysTitle">Financial journeys</h1>
-        <p class="page-lede">Pick the question closest to yours. We’ll open the right calculator and tell you what to fill in.</p>
+        <p class="page-lede">Pick a question. Get a straight answer.</p>
         <div id="journeyGroups"></div>
       </main>
 
       <main class="site-view view-list" id="view-calculators" data-view="calculators" aria-labelledby="calcTitle">
         <a class="back-link" href="#home">← Home</a>
         <h1 class="page-title" id="calcTitle">Calculators</h1>
-        <p class="page-lede">Go straight to the numbers. No sign-up and no questions first, and you can change every input.</p>
+        <p class="page-lede">Straight to the numbers. Change any input.</p>
         <ul class="tool-list" id="calcList"></ul>
       </main>
 
       <main class="site-view view-tool" id="view-tool" data-view="tool" aria-labelledby="toolTitle">
         <a class="back-link" id="toolBack" href="#journeys">← Financial journeys</a>
-        <p class="tool-kicker" id="toolKicker"></p>
+        <div class="tool-head">
+          <span class="icon-chip icon-chip--purple" id="toolIcon" aria-hidden="true"></span>
+          <p class="tool-kicker" id="toolKicker"></p>
+        </div>
         <h1 class="page-title tool-title" id="toolTitle"></h1>
 
         <section class="tool-answer" id="toolAnswer" aria-live="polite" data-state="">
@@ -248,12 +262,19 @@
           <div class="tool-tiles" id="toolTiles" hidden></div>
         </section>
 
-        <div class="tool-needs-budget" id="toolNeedsBudget" hidden>
-          <p id="toolNeedsBudgetText"></p>
-          <a href="#go/income" id="toolNeedsBudgetLink" class="tool-needs-budget-link">Open the budget planner →</a>
-        </div>
+        <section class="tool-empty" id="toolEmpty" hidden aria-live="polite">
+          <svg class="tool-empty-art" viewBox="0 0 120 72" aria-hidden="true">
+            <path d="M14 56 C 34 56, 38 20, 60 20 S 92 50, 108 26" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-dasharray="1 7" opacity="0.5" />
+            <circle cx="14" cy="56" r="5" class="node node--start" />
+            <circle cx="60" cy="20" r="5" class="node" />
+            <circle cx="108" cy="26" r="7" class="node node--empty" />
+          </svg>
+          <h2 class="tool-empty-title" id="toolEmptyTitle"></h2>
+          <p class="tool-empty-text" id="toolEmptyText"></p>
+          <a href="#go/income" class="tool-empty-link" id="toolEmptyLink">Fill in your budget →</a>
+        </section>
 
-        <div class="tool-columns">
+        <div class="tool-columns" id="toolColumns">
           <section class="tool-section" id="toolAdjust" aria-labelledby="toolAdjustTitle">
             <h2 id="toolAdjustTitle">Change the numbers</h2>
             <div class="tool-fields" id="toolFields"></div>
@@ -267,9 +288,8 @@
           </section>
         </div>
 
-        <p class="tool-source">
-          Figures in <span id="toolSourceCode"></span>, per month unless stated. Calculated in this browser.
-          <a href="#go/income" id="toolEditBudget">Edit your budget →</a>
+        <p class="tool-source" id="toolSource">
+          Monthly figures in <span id="toolSourceCode"></span>. <a href="#go/income" id="toolEditBudget">Edit your budget →</a>
         </p>
       </main>
 
@@ -574,10 +594,9 @@
           <span class="badge badge-neutral suggested-badge" id="splitSuggestedBadge" hidden>Suggested</span>
         </h2>
         <p class="hint">
-          How do you want to divide your income? Everything other than <strong>Expenses</strong>
-          is money you put aside — savings, emergency fund, investments, travel, debt payoff.
-          <span id="splitSuggestedHint" hidden>These are suggested starting points — change them or delete what you don’t need.</span>
-          Aim for 100%.
+          Split your income. Everything except <strong>Expenses</strong> is money you put aside.
+          Change one and the others adjust to stay at 100%.
+          <span id="splitSuggestedHint" hidden>This is a suggested start.</span>
         </p>
         <table class="table table-budget-split">
           <thead>
@@ -972,14 +991,14 @@
     </nav>
 
     <script src="./icons.js"></script>
-    <script src="./budget-core.js?v=20261109x"></script>
-    <script src="./script.js?v=20261109x"></script>
-    <script src="./receipt-core.js?v=20261109x"></script>
-    <script src="./receipts.js?v=20261109x"></script>
-    <script src="./nav.js?v=20261109x"></script>
-    <script src="./overview.js?v=20261109x"></script>
-    <script src="./journey-core.js?v=20261109x"></script>
-    <script src="./journeys.js?v=20261109x"></script>
-    <script src="./home.js?v=20261109x"></script>
+    <script src="./budget-core.js?v=20261109z"></script>
+    <script src="./script.js?v=20261109z"></script>
+    <script src="./receipt-core.js?v=20261109z"></script>
+    <script src="./receipts.js?v=20261109z"></script>
+    <script src="./nav.js?v=20261109z"></script>
+    <script src="./overview.js?v=20261109z"></script>
+    <script src="./journey-core.js?v=20261109z"></script>
+    <script src="./journeys.js?v=20261109z"></script>
+    <script src="./home.js?v=20261109z"></script>
   </body>
 </html>

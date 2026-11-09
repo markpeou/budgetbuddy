@@ -28,6 +28,16 @@
     return new Date(today.getFullYear(), today.getMonth() + Math.round(months), 1);
   }
 
+  const DAYS_PER_MONTH = 365.25 / 12;
+
+  /** The day money runs out: today + a fractional number of months. */
+  function dateAfter(months, today = new Date()) {
+    if (!Number.isFinite(months)) return null;
+    const d = new Date(today.getFullYear(), today.getMonth(), today.getDate());
+    d.setDate(d.getDate() + Math.round(months * DAYS_PER_MONTH));
+    return d;
+  }
+
   // ---------------------------------------------------------------------------
   // Understand my money
   // ---------------------------------------------------------------------------
@@ -125,6 +135,7 @@
       pot,
       monthlyBurn: Math.max(0, burn),
       months: months(burn),
+      exactMonths: burn <= 0 ? Infinity : pot / burn,
       essentialsMonths: num(essentials) > 0 ? months(burnEssentials) : null,
       incomeCovers: burn <= 0,
     };
@@ -197,5 +208,5 @@
     return out;
   }
 
-  return { breakdown, capacity, snapshot, emergencyFund, runway, savingsGoal, incomeChange, monthsUntil, addMonths };
+  return { breakdown, capacity, snapshot, emergencyFund, runway, savingsGoal, incomeChange, monthsUntil, addMonths, dateAfter };
 });

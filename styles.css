@@ -2801,7 +2801,7 @@ body.sheet-open .tab-bar {
 }
 
 .save-prompt-sub {
-  margin: 4px 0 12px;
+  margin: 4px 0 0;
   font-size: 13px;
   line-height: 1.5;
   color: var(--muted);
@@ -2809,6 +2809,7 @@ body.sheet-open .tab-bar {
 
 .save-prompt-form,
 .save-prompt-changed {
+  margin-top: 12px;
   display: flex;
   flex-wrap: wrap;
   gap: 8px;
@@ -2863,4 +2864,9 @@ body.sheet-open .tab-bar {
     flex: 1 1 auto;
     width: auto;
   }
+}
+
+/* No status yet (e.g. no expenses entered): hide the empty "Status" label. */
+.table-budget-split tbody td.status-cell:empty {
+  display: none;
 }

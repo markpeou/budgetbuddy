@@ -121,15 +121,15 @@
   };
 
   const FIELDS = {
-    savings: { label: 'Savings you could use', type: 'money', help: 'One figure, shared by every calculator.' },
+    savings: { label: 'Savings you could use', type: 'money', help: 'Used by every calculator.' },
     income: { label: 'Monthly income', type: 'money', source: 'income' },
     expenses: { label: 'Monthly costs', type: 'money', source: 'expenses' },
-    essentials: { label: 'Essential monthly costs', type: 'money', source: 'essentials', help: 'Your fixed costs.' },
+    essentials: { label: 'Essential monthly costs', type: 'money', source: 'essentials' },
     cover: { label: 'Months of cover', type: 'choice', options: [3, 6, 12], unit: 'months' },
     emergencySaved: { label: 'Already set aside', type: 'money', source: 'emergencySaved' },
     emergencyMonthly: { label: 'Adding each month', type: 'money', source: 'emergencyMonthly' },
-    incomeDuring: { label: 'Income you’d still have each month', type: 'money', help: 'Part-time work, rent from a room, benefits.' },
-    lumpSum: { label: 'Payout or other one-off money', type: 'money', help: 'Redundancy pay, a final payslip, a tax refund.' },
+    incomeDuring: { label: 'Income you’d still have each month', type: 'money', help: 'e.g. part-time work' },
+    lumpSum: { label: 'Payout or other one-off money', type: 'money', help: 'e.g. redundancy pay' },
     duration: { label: 'Time off', type: 'choice', options: [3, 6, 12], unit: 'months' },
     goalName: { label: 'What you’re saving for', type: 'text', placeholder: 'e.g. A trip home' },
     goalTarget: { label: 'Target', type: 'money' },
@@ -183,6 +183,9 @@
   // Words are English, so dates are too (a Vietnamese phone shouldn't get “tháng 1 năm 2027” mid-sentence).
   const monthYear = (d) => d.toLocaleDateString('en-GB', { month: 'long', year: 'numeric' });
   const fromToday = (m) => monthYear(J.addMonths(m));
+  /** "early July 2027" — honest precision for a date months away. */
+  const partOfMonth = (d) => (d ? `${d.getDate() <= 10 ? 'early' : d.getDate() <= 20 ? 'mid' : 'late'} ${monthYear(d)}` : 'indefinitely');
+  const dayMonth = (d) => d.toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' });
 
   // ---------------------------------------------------------------------------
   // Tools: fields shown, and the answer they produce
@@ -191,28 +194,26 @@
   const TOOLS = {
     breakdown: {
       name: 'Spending breakdown',
+      icon: 'chart-pie',
       presets: {
         default: { q: 'Where does my money go each month?' },
         living: { q: 'How much does it really cost to live each month?' },
       },
       fields: [],
-      needsBudget: 'Add your costs in the budget planner and they’ll be ranked here.',
       answer(p) {
         const b = J.breakdown(budgetRows());
-        if (!b.total) return { main: 'Add your regular costs to see where your money goes.', state: '' };
+        if (!b.total) return { empty: { title: 'No costs yet', text: 'Add your costs to the budget and they’ll be ranked here.' } };
         const names = b.top.map((r) => r.name.toLowerCase());
         const list = names.length > 1 ? `${names.slice(0, -1).join(', ')} and ${names.at(-1)}` : names[0];
-        const main = p === 'living'
-          ? `Living costs you ${money(b.total)} a month.`
-          : `Your ${b.top.length === 1 ? 'biggest cost takes' : `${b.top.length} biggest costs take`} ${pct(b.topShare)} of your spending: ${list}.`;
         return {
-          main,
-          sub: `${money(b.flexible)} a month is flexible — that’s the part you can change quickly.`,
+          main: p === 'living'
+            ? `Living costs you ${money(b.total)} a month.`
+            : `${b.top.length === 1 ? 'One cost takes' : `${b.top.length} costs take`} ${pct(b.topShare)} of your spending: ${list}.`,
           figures: [
-            ['Total each month', money(b.total)],
-            ['Fixed (essentials)', money(b.fixed)],
-            ['Flexible (variable + subscriptions)', money(b.flexible)],
-            ['Each year', money(b.total * 12)],
+            ['Fixed', money(b.fixed)],
+            ['Flexible (you can change these)', money(b.flexible)],
+            ['Total a month', money(b.total)],
+            ['Total a year', money(b.total * 12)],
           ],
           list: b.items.map((r) => ({ label: r.name, value: money(r.monthly), share: r.share, kind: r.kind })),
         };
@@ -221,6 +222,7 @@
 
     capacity: {
       name: 'Savings capacity',
+      icon: 'coins',
       presets: {
         default: { q: 'How much can I realistically save?' },
         year: { q: 'How much can I save over the next year?' },
@@ -234,65 +236,57 @@
         const flexible = Math.max(0, b.expenses - b.fixed);
         const c = J.capacity({ income: inc, expenses: exp, goals: b.goals, flexible });
         if (p === 'needed') {
-          if (!exp) return { main: 'Add your monthly costs to see the income you need.' };
+          if (!exp) return { empty: { title: 'No costs yet', text: 'Type your monthly costs below, or fill in your budget.' } };
           return {
             main: `You need ${money(c.incomeNeeded)} a month to cover your costs.`,
-            sub: b.goals > 0 ? `${money(c.incomeNeededWithGoals)} if you also want to fund your savings & goals.` : '',
+            sub: b.goals > 0 ? `${money(c.incomeNeededWithGoals)} with your savings & goals.` : '',
             state: inc ? (inc >= c.incomeNeeded ? 'good' : 'warn') : '',
-            figures: [
-              ['Monthly costs', money(exp)],
-              ['Savings & goals planned', money(b.goals)],
-              ...(inc ? [['Your income now', money(inc)], [inc >= exp ? 'Room to spare' : 'Short by', money(Math.abs(inc - exp))]] : []),
-            ],
+            figures: inc ? [[`${money(inc)} income − ${money(exp)} costs`, money(inc - exp)]] : [],
           };
         }
-        if (!inc) return { main: 'Add your monthly income to see what you can save.' };
+        if (!inc) return { empty: { title: 'No income yet', text: 'Type your income and costs below, or fill in your budget.' } };
         if (c.monthly <= 0) {
           return {
             main: `Your costs are ${money(-c.monthly)} a month more than you earn.`,
-            sub: 'There’s nothing left to save until income rises or costs come down.',
             state: 'bad',
-            figures: [['Monthly income', money(inc)], ['Monthly costs', money(exp)]],
+            figures: [[`${money(inc)} income − ${money(exp)} costs`, money(c.monthly)]],
           };
         }
-        const main = p === 'year'
-          ? `You could save ${money(c.yearly)} over the next year.`
-          : `You can save ${money(c.monthly)} a month — ${pct(c.rate)} of your income.`;
-        const sub = p === 'year'
-          ? `That’s ${money(c.monthly)} a month, ${pct(c.rate)} of your income.`
-          : `That’s ${money(c.yearly)} a year.`;
-        const figures = [
-          ['Monthly income', money(inc)],
-          ['Monthly costs', `− ${money(exp)}`],
-          ['Left each month', money(c.monthly)],
-        ];
         const notes = [];
-        if (c.goalsGap > 0) notes.push(`Your savings & goals split plans ${money(b.goals)} a month — ${money(c.goalsGap)} more than you have left.`);
-        if (c.trimTenPercent > 0) notes.push(`Trimming flexible spending by 10% would add ${money(c.trimTenPercent)} a month.`);
-        return { main, sub, state: 'good', figures, notes };
+        if (c.goalsGap > 0) notes.push(`Your savings & goals plan ${money(b.goals)} a month: ${money(c.goalsGap)} more than you have.`);
+        if (c.trimTenPercent > 0) notes.push(`Cut flexible spending by 10% to save ${money(c.trimTenPercent)} more a month.`);
+        return {
+          main: p === 'year'
+            ? `You could save ${money(c.yearly)} over the next year.`
+            : `You can save ${money(c.monthly)} a month, ${pct(c.rate)} of your income.`,
+          state: 'good',
+          figures: [
+            [`${money(inc)} income − ${money(exp)} costs`, `${money(c.monthly)} a month`],
+            ['× 12', `${money(c.yearly)} a year`],
+          ],
+          notes,
+        };
       },
     },
 
     snapshot: {
       name: 'Money snapshot',
+      icon: 'activity',
       presets: { default: { q: 'What does my financial situation look like?' } },
       fields: ['savings'],
-      needsBudget: 'Fill in your income and costs in the budget planner to see your snapshot.',
       answer() {
         const b = budget();
-        if (!b.income) return { main: 'Add your income and costs to see your snapshot.' };
+        if (!b.income) return { empty: { title: 'Your budget is empty', text: 'Fill in your income and costs to see your snapshot.' }, hideFields: true };
         const top = J.breakdown(budgetRows()).items[0];
         const s = J.snapshot({ income: b.income, fixed: b.fixed, expenses: b.expenses, biggest: top, savings: value('savings') });
         const kept = s.savingsRate;
         return {
           main: kept >= 0 ? `You keep ${pct(kept)} of what you earn.` : `You spend ${pct(-kept)} more than you earn.`,
-          sub: `Fixed costs take ${pct(s.fixedShare)} of your income.`,
           state: kept >= 0 ? 'good' : 'bad',
           tiles: [
-            { label: 'Savings rate', value: pct(kept), note: 'of income left after all costs' },
-            { label: 'Locked in', value: pct(s.fixedShare), note: 'of income goes to fixed costs' },
-            { label: 'Biggest cost', value: s.biggest ? money(s.biggest.monthly) : '—', note: s.biggest ? s.biggest.name : 'No costs yet' },
-            { label: 'Runway', value: s.runwayMonths != null ? months(s.runwayMonths) : '—', note: s.runwayMonths != null ? 'your savings would cover' : 'Add savings below to see this' },
+            { label: 'Fixed costs', value: pct(s.fixedShare), note: 'of your income' },
+            { label: 'Biggest cost', value: s.biggest ? money(s.biggest.monthly) : '—', note: s.biggest ? s.biggest.name : 'None yet' },
+            { label: 'Runway', value: s.runwayMonths != null ? months(s.runwayMonths) : '—', note: s.runwayMonths != null ? 'without income' : 'Add savings below' },
           ],
         };
       },
@@ -300,38 +294,33 @@
 
     emergency: {
       name: 'Emergency fund',
+      icon: 'life-buoy',
       presets: { default: { q: 'How much should I have in an emergency fund?' } },
       // Months of cover is chosen on the three targets in the answer itself.
       fields: ['essentials', 'emergencySaved', 'emergencyMonthly'],
       answer() {
         const ess = value('essentials');
-        if (!ess) return { main: 'Add your essential monthly costs to see your target.' };
-        const r = J.emergencyFund({ essentials: ess, months: value('cover'), saved: value('emergencySaved'), monthly: value('emergencyMonthly') });
+        if (!ess) return { empty: { title: 'No essential costs yet', text: 'Type your essential monthly costs below, or fill in your budget.' } };
+        const per = value('emergencyMonthly');
+        const r = J.emergencyFund({ essentials: ess, months: value('cover'), saved: value('emergencySaved'), monthly: per });
         const targets = r.targets.map((t) => ({ label: `${t.months} months`, value: money(t.target), key: t.months }));
-        if (!r.chosen) {
-          return {
-            main: `Your essentials cost ${money(ess)} a month.`,
-            sub: 'Choose how many months you’d like covered.',
-            targets,
-          };
-        }
-        const fig = [
-          [`Target (${r.chosen} months of essentials)`, money(r.target)],
-          ['Already set aside', money(r.saved)],
-          ['Still to go', money(r.gap)],
-        ];
-        if (r.covered) {
-          return { main: `You’re covered: ${money(r.saved)} is more than ${r.chosen} months of essentials.`, sub: r.monthsCoveredNow ? `It would cover about ${Math.floor(r.monthsCoveredNow)} months.` : '', state: 'good', targets, figures: fig };
-        }
-        const when = r.monthsToBuild != null
-          ? `About ${months(r.monthsToBuild)} at ${money(value('emergencyMonthly'))} a month — by ${fromToday(r.monthsToBuild)}.`
-          : 'Set an amount to add each month to see when you’d get there.';
-        return { main: `Aim for ${money(r.target)}. You have ${money(r.saved)}, so ${money(r.gap)} to go.`, sub: when, state: 'warn', targets, figures: fig };
+        if (!r.chosen) return { main: 'How many months would you like covered?', sub: `Your essentials are ${money(ess)} a month.`, targets };
+        const fig = [[`${money(ess)} × ${r.chosen} months`, money(r.target)], ['Set aside', `− ${money(r.saved)}`]];
+        if (r.covered) return { main: `You’re covered for ${r.chosen} months.`, sub: `${money(r.saved)} would last about ${Math.floor(r.monthsCoveredNow)} months.`, state: 'good', targets, figures: fig };
+        if (r.monthsToBuild != null) fig.push([`${money(r.gap)} ÷ ${money(per)} a month`, months(r.monthsToBuild)]);
+        return {
+          main: `${money(r.gap)} to go to reach ${money(r.target)}.`,
+          sub: r.monthsToBuild != null ? `About ${months(r.monthsToBuild)} at your current rate, by ${fromToday(r.monthsToBuild)}.` : 'Add a monthly amount below to see when.',
+          state: 'warn',
+          targets,
+          figures: fig,
+        };
       },
     },
 
     runway: {
       name: 'Financial runway',
+      icon: 'hourglass',
       presets: {
         default: { q: 'How long could I manage without an income?', fields: ['savings', 'expenses', 'essentials', 'incomeDuring'] },
         timeoff: { q: 'Could I afford to take six months off?', fields: ['duration', 'savings', 'expenses', 'incomeDuring'], defaults: { duration: 6 } },
@@ -340,7 +329,7 @@
       },
       answer(p, preset) {
         const costs = value('expenses');
-        if (!costs) return { main: 'Add your monthly costs to see how long your savings would last.' };
+        if (!costs) return { empty: { title: 'No monthly costs yet', text: 'Type your costs and savings below, or fill in your budget.' } };
         const duration = preset.fields.includes('duration') ? Number(value('duration') || preset.defaults.duration) : 0;
         const b = budget();
         const r = J.runway({
@@ -352,138 +341,121 @@
           duration,
           capacity: Math.max(0, b.income - b.expenses),
         });
-        if (r.incomeCovers) {
-          return { main: 'The income you’d still have covers your costs.', sub: 'Your savings wouldn’t need to be touched.', state: 'good', figures: [['Monthly costs', money(costs)], ['Income you’d still have', money(value('incomeDuring'))]] };
-        }
-        if (duration && !r.pot && p !== 'leave') {
-          return {
-            main: `${duration} months off would cost ${money(r.breakCost)}.`,
-            sub: 'Add your savings below to see if you could afford it.',
-            figures: [[`${duration} months of costs`, money(r.breakCost)]],
-          };
-        }
+        if (r.incomeCovers) return { main: 'Your other income covers your costs.', sub: 'Your savings would stay untouched.', state: 'good' };
         if (duration) {
-          const fig = [
-            [`${duration} months of costs`, money(r.breakCost)],
-            ['Savings you could use', money(r.pot)],
-            [r.affordable ? 'Left afterwards' : 'Short by', money(Math.abs(r.leftAfter))],
-          ];
+          const fig = [[`${money(r.monthlyBurn)} × ${duration} months`, money(r.breakCost)], ['Your savings', money(r.pot)]];
+          if (!r.pot && p !== 'leave') return { main: `${duration} months off would cost ${money(r.breakCost)}.`, sub: 'Add your savings below to see if you can afford it.', figures: fig.slice(0, 1) };
+          if (r.monthsToSaveGap) fig.push([`${money(r.shortfall)} ÷ ${money(Math.max(0, b.income - b.expenses))} saved a month`, months(r.monthsToSaveGap)]);
           if (p === 'leave') {
             return {
-              main: `Save ${money(r.breakCost)} to cover ${duration} months without pay.`,
-              sub: r.affordable ? `You have ${money(r.pot)} — that’s already enough.` : `You have ${money(r.pot)}, so ${money(r.shortfall)} to go${r.monthsToSaveGap ? ` — about ${months(r.monthsToSaveGap)} at your current rate` : ''}.`,
+              main: `You need ${money(r.breakCost)} for ${duration} months without pay.`,
+              sub: r.affordable ? 'You already have enough.' : `${money(r.shortfall)} to go${r.monthsToSaveGap ? `, about ${months(r.monthsToSaveGap)} of saving` : ''}.`,
               state: r.affordable ? 'good' : 'warn',
               figures: fig,
             };
           }
           return {
-            main: r.affordable
-              ? `Yes — ${duration} months off costs ${money(r.breakCost)} and you have ${money(r.pot)}.`
-              : `Not yet — you’re ${money(r.shortfall)} short for ${duration} months off.`,
-            sub: r.affordable
-              ? `You’d have ${money(r.leftAfter)} left when you’re back.`
-              : r.monthsToSaveGap ? `That’s about ${months(r.monthsToSaveGap)} of saving at your current rate.` : 'Add your income in the budget to see how long it would take to save.',
+            main: r.affordable ? `Yes. You’d have ${money(r.leftAfter)} left after ${duration} months off.` : `Not yet. You’re ${money(r.shortfall)} short.`,
+            sub: r.affordable ? '' : r.monthsToSaveGap ? `About ${months(r.monthsToSaveGap)} of saving at your current rate.` : '',
             state: r.affordable ? 'good' : 'warn',
             figures: fig,
           };
         }
-        if (!r.pot) return { main: 'Add your savings to see how long they’d last.', figures: [['Monthly costs', money(costs)]] };
-        const main = p === 'jobloss' && value('lumpSum') > 0
-          ? `With ${money(value('savings'))} saved plus ${money(value('lumpSum'))}, you could cover ${months(r.months)}.`
-          : `Your savings would last ${months(r.months)}${r.months > 0 && r.months !== Infinity ? ` — until ${fromToday(r.months)}` : ''}.`;
-        const sub = r.essentialsMonths != null && r.essentialsMonths > r.months
-          ? `Cutting back to essentials stretches that to ${months(r.essentialsMonths)}.`
-          : '';
+        if (!r.pot) return { empty: { title: 'No savings entered', text: 'Add your savings below to see how long they’d last.' } };
+        const end = J.dateAfter(r.exactMonths);
+        const lump = p === 'jobloss' && value('lumpSum') > 0;
+        const fig = [
+          [`${money(r.pot)} ÷ ${money(r.monthlyBurn)} a month`, `${r.exactMonths.toFixed(1)} months`],
+          ['Counting from', `today, ${dayMonth(new Date())}`],
+        ];
         return {
-          main,
-          sub,
+          main: `${lump ? 'Your savings and payout' : 'Your savings'} would last ${months(r.months)}, until ${partOfMonth(end)}.`,
+          sub: r.essentialsMonths != null && r.essentialsMonths > r.months ? `Cut back to essentials and it’s ${months(r.essentialsMonths)}.` : '',
           state: r.months >= 6 ? 'good' : 'warn',
-          figures: [
-            ['Savings you could use', money(r.pot)],
-            ['Going out each month', money(r.monthlyBurn)],
-            ...(r.essentialsMonths != null ? [['Essentials only', `${money(Math.max(0, value('essentials') - (value('incomeDuring') || 0)))} a month`]] : []),
-          ],
+          figures: fig,
         };
       },
     },
 
     goal: {
       name: 'Savings goal',
+      icon: 'target',
       presets: { default: { q: 'How can I reach my savings goal?' } },
       fields: ['goalName', 'goalTarget', 'goalSaved', 'goalMonthly', 'goalDeadline'],
       answer() {
         const target = value('goalTarget');
-        if (!target) return { main: 'Enter a target to see when you’ll reach it.' };
+        if (!target) return { empty: { title: 'No target yet', text: 'Enter what you’re saving for and how much below.' } };
         const name = String(value('goalName') || '').trim();
         const g = J.savingsGoal({ target, saved: value('goalSaved'), monthly: value('goalMonthly'), deadline: value('goalDeadline') });
-        const what = name ? name : money(target);
-        const fig = [['Target', money(target)], ['Saved so far', money(g.saved)], ['Still to go', money(g.gap)], ['Saving each month', money(g.monthly)]];
-        if (g.reached) return { main: `You’ve already reached ${what}.`, state: 'good', figures: fig };
+        const what = name || money(target);
+        if (g.reached) return { main: `You’ve already reached ${what}.`, state: 'good' };
         if (g.deadlineMonths) {
           const by = monthYear(J.addMonths(g.deadlineMonths));
-          if (g.onTrack) {
-            return { main: `You’re on track: at ${money(g.monthly)} a month you’ll reach ${what} by ${monthYear(g.reachDate)}.`, sub: `That’s before your ${by} deadline.`, state: 'good', figures: fig };
-          }
+          const fig = [[`${money(g.gap)} ÷ ${months(g.deadlineMonths)}`, `${money(g.requiredMonthly)} a month`]];
+          if (g.onTrack) return { main: `You’re on track to reach ${what} by ${monthYear(g.reachDate)}.`, sub: `Ahead of your ${by} deadline.`, state: 'good', figures: fig };
           return {
-            main: `To reach ${what} by ${by}, save ${money(g.requiredMonthly)} a month.`,
-            sub: g.monthly > 0 ? `That’s ${money(g.extraNeeded)} more than you’re saving now.` : `That’s ${months(g.deadlineMonths)} from now.`,
+            main: `Save ${money(g.requiredMonthly)} a month to reach ${what} by ${by}.`,
+            sub: g.monthly > 0 ? `${money(g.extraNeeded)} more than now.` : '',
             state: 'warn',
-            figures: [...fig, ['Needed each month', money(g.requiredMonthly)]],
+            figures: fig,
           };
         }
-        if (g.months == null) return { main: 'Set how much you’ll save each month to see when you’ll get there.', figures: fig };
-        return { main: `You’ll reach ${what} by ${monthYear(g.reachDate)}.`, sub: `${months(g.months)} at ${money(g.monthly)} a month.`, state: 'good', figures: fig };
+        if (g.months == null) return { empty: { title: 'How much each month?', text: 'Add a monthly amount below to see when you’ll get there.' } };
+        return {
+          main: `You’ll reach ${what} by ${monthYear(g.reachDate)}.`,
+          state: 'good',
+          figures: [[`${money(g.gap)} ÷ ${money(g.monthly)} a month`, months(g.months)]],
+        };
       },
     },
 
     income: {
       name: 'Income change',
+      icon: 'trending-down',
       presets: {
         default: { q: 'What happens if my income decreases?', fields: ['newIncome', 'income', 'expenses', 'savings'] },
         less: { q: 'Could I afford to work less?', fields: ['newIncome', 'income', 'expenses', 'savings'], chips: [-20, -40, -50] },
         career: { q: 'Could I afford to change careers?', fields: ['newIncome', 'transitionMonths', 'transitionIncome', 'oneOff', 'income', 'expenses', 'savings'], chips: [] },
       },
-      answer(p, preset) {
+      answer(p) {
         const inc = value('income');
         const exp = value('expenses');
         const next = value('newIncome');
-        if (!inc || !exp) return { main: 'Add your current income and costs to compare.' };
-        if (next == null || next === '') return { main: p === 'career' ? 'Enter the salary you’d expect in the new role.' : 'Enter the income you’d have instead, or pick a change.' };
+        if (!inc || !exp) return { empty: { title: 'No income or costs yet', text: 'Type them below, or fill in your budget.' } };
+        if (next == null || next === '') return { empty: { title: p === 'career' ? 'What would the new role pay?' : 'What would you earn instead?', text: p === 'career' ? 'Enter the new monthly salary below.' : 'Enter it below, or tap a percentage.' }, noBudgetLink: true };
         const career = p === 'career';
         const c = J.incomeChange({
           income: inc, newIncome: next, expenses: exp, savings: value('savings'),
           transition: career ? { months: value('transitionMonths'), income: value('transitionIncome'), oneOff: value('oneOff') } : null,
         });
         const fig = [
-          ['Left each month now', money(c.leftNow)],
-          ['Left each month on the new income', money(c.leftNew)],
-          ['Difference each year', money(c.diffYearly)],
+          [`Now: ${money(inc)} − ${money(exp)} costs`, money(c.leftNow)],
+          [`New: ${money(next)} − ${money(exp)} costs`, money(c.leftNew)],
         ];
         if (career && c.transitionCost != null) {
-          fig.unshift(['Cost of the switch', money(c.transitionCost)]);
-          const after = c.short
-            ? `Afterwards you’d be ${money(-c.leftNew)} short each month.`
-            : `Afterwards you’d have ${money(c.leftNew)} a month left (vs ${money(c.leftNow)} now).`;
-          const extra = c.breakEvenMonths ? ` You’d be ahead after ${months(c.breakEvenMonths)} in the new role.` : '';
-          const cover = value('savings') > 0 ? (c.savingsAfterTransition >= 0 ? ' Your savings cover the switch.' : ` Your savings fall ${money(-c.savingsAfterTransition)} short of it.`) : '';
+          const t = c.transitionMonths;
+          const costFig = t ? [[`${t} months × ${money(Math.max(0, exp - (value('transitionIncome') || 0)))} shortfall`, money(c.transitionCost - (value('oneOff') || 0))]] : [];
+          if (value('oneOff') > 0) costFig.push(['One-off costs', money(value('oneOff'))]);
+          const ahead = c.breakEvenMonths ? ` Ahead after ${months(c.breakEvenMonths)} in the new role.` : '';
+          const cover = value('savings') > 0 && c.savingsAfterTransition < 0 ? ` Your savings are ${money(-c.savingsAfterTransition)} short.` : '';
           return {
-            main: `The switch costs ${money(c.transitionCost)} in total.`,
-            sub: after + extra + cover,
+            main: `The switch costs ${money(c.transitionCost)}.`,
+            sub: (c.short ? `Then you’d be ${money(-c.leftNew)} short each month.` : `Then you’d have ${money(c.leftNew)} a month left.`) + ahead + cover,
             state: c.short || c.savingsAfterTransition < 0 ? 'warn' : 'good',
-            figures: fig,
+            figures: [...costFig, ...fig],
           };
         }
         if (c.short) {
           return {
-            main: `On ${money(next)} you’d be ${money(-c.leftNew)} short each month.`,
-            sub: c.savingsCoverMonths ? `Your savings would cover that for ${months(c.savingsCoverMonths)}.` : 'Add your savings to see how long they’d cover the gap.',
+            main: `You’d be ${money(-c.leftNew)} short each month.`,
+            sub: c.savingsCoverMonths ? `Your savings would cover that for ${months(c.savingsCoverMonths)}.` : 'Add your savings below to see how long they’d last.',
             state: 'bad',
             figures: fig,
           };
         }
         return {
-          main: `On ${money(next)} you’d have ${money(c.leftNew)} left a month instead of ${money(c.leftNow)}.`,
-          sub: c.diffYearly < 0 ? `That’s ${money(-c.diffYearly)} less a year.` : `That’s ${money(c.diffYearly)} more a year.`,
+          main: `You’d have ${money(c.leftNew)} left a month, down from ${money(c.leftNow)}.`,
+          sub: c.diffYearly < 0 ? `${money(-c.diffYearly)} less a year.` : `${money(c.diffYearly)} more a year.`,
           state: c.leftNew > 0 ? 'good' : 'warn',
           figures: fig,
         };
@@ -517,7 +489,7 @@
       const src = SOURCES[f.source]();
       const hasOwn = own != null && own !== '';
       if (hasOwn && src.value > 0 && Math.abs(own - src.value) > 0.5) {
-        return { text: `Your own figure.`, reset: `Use ${src.label} (${money(src.value)})` };
+        return { text: 'Your figure ·', reset: `Use ${src.label} (${money(src.value)})` };
       }
       if (!hasOwn && src.value > 0) return { text: `From ${src.label}.` };
       if (!hasOwn && f.help) return { text: f.help };
@@ -649,6 +621,18 @@
     const preset = presetOf(id, presetKey);
     const a = tool.answer(presetKey, preset) || {};
 
+    // Empty: one clear card that says so, instead of an answer.
+    const empty = $('toolEmpty');
+    empty.hidden = !a.empty;
+    $('toolAnswer').hidden = Boolean(a.empty);
+    if (a.empty) {
+      $('toolEmptyTitle').textContent = a.empty.title;
+      $('toolEmptyText').textContent = a.empty.text;
+      $('toolEmptyLink').hidden = Boolean(a.noBudgetLink);
+    }
+    $('toolAdjust').hidden = !presetOf(current.id, current.presetKey).fields.length || Boolean(a.hideFields);
+    $('toolSource').hidden = Boolean(a.empty); // the empty card already links to the budget
+
     const card = $('toolAnswer');
     card.dataset.state = a.state || '';
     $('toolAnswerMain').textContent = a.main || '';
@@ -714,7 +698,8 @@
     const notes = $('toolNotes');
     notes.innerHTML = '';
     (a.notes || []).forEach((n) => notes.appendChild(el('li', '', n)));
-    $('toolBehind').hidden = !(a.figures && a.figures.length) && !(a.list && a.list.length) && !(a.notes && a.notes.length);
+    $('toolBehind').hidden = Boolean(a.empty) || (!(a.figures && a.figures.length) && !(a.list && a.list.length) && !(a.notes && a.notes.length));
+    $('toolColumns').classList.toggle('is-single', $('toolBehind').hidden || $('toolAdjust').hidden);
     renderHints();
   }
 
@@ -727,15 +712,12 @@
 
     if (rebuildFields) {
       $('toolKicker').textContent = tool.name;
+      $('toolIcon').innerHTML = typeof icon === 'function' ? icon(tool.icon, { size: 18 }) : '';
       $('toolTitle').textContent = preset.q;
       const fields = $('toolFields');
       fields.innerHTML = '';
       preset.fields.forEach((k) => fields.appendChild(buildField(k, preset)));
-      $('toolAdjust').hidden = !preset.fields.length;
-      const b = budget();
-      $('toolNeedsBudget').hidden = !(tool.needsBudget && !b.has);
-      $('toolNeedsBudgetText').textContent = tool.needsBudget || '';
-      $('toolSourceCode').textContent = `${getCurrencyMeta(code()).name} (${code()})`;
+      $('toolSourceCode').textContent = code();
     }
     // Keep money symbols in step with the income currency.
     document.querySelectorAll('#toolFields .money-symbol').forEach((s) => {
@@ -777,7 +759,7 @@
       }
     });
   }
-  const needsLink = $('toolNeedsBudgetLink');
+  const needsLink = $('toolEmptyLink');
   if (needsLink) {
     needsLink.addEventListener('click', () => {
       try {

@@ -218,3 +218,32 @@ test('majority currency: by value, sticky, count fallback, empty fallback', () =
   assert.strictEqual(C.currencyForTimeZone(undefined), null);
   console.log('✓ currencyForTimeZone maps zones to local currency');
 }
+
+// Savings & goals split always totals 100%
+{
+  const C = require('../budget-core.js');
+  const assert = require('assert');
+  const sum = (a) => a.reduce((x, y) => x + y, 0);
+  const base = [{ percent: 50 }, { percent: 30 }, { percent: 10 }, { percent: 10 }];
+  // Raise savings to 40: others (50/10/10) share the remaining 60 in proportion.
+  const up = C.balanceSplits(base, 1, 40);
+  assert.strictEqual(sum(up), 100);
+  assert.deepStrictEqual(up, [43, 40, 9, 8]);
+  // Lower expenses to 30: others share 70 in proportion (30:10:10 → 42/14/14).
+  assert.deepStrictEqual(C.balanceSplits(base, 0, 30), [30, 42, 14, 14]);
+  // Typing 6 then 60 from the same baseline gives the same answer as typing 60.
+  assert.deepStrictEqual(C.balanceSplits(base, 1, 60), C.balanceSplits(base, 1, 60));
+  // Over 100 clamps; others go to 0.
+  assert.deepStrictEqual(C.balanceSplits(base, 2, 150), [0, 0, 100, 0]);
+  // Others all zero: remainder shared equally.
+  assert.deepStrictEqual(C.balanceSplits([{ percent: 100 }, { percent: 0 }, { percent: 0 }], 0, 40), [40, 30, 30]);
+  // Normalising an old or broken split.
+  assert.deepStrictEqual(C.normalizeSplits([{ percent: 50 }, { percent: 30 }, { percent: 10 }]), [56, 33, 11]);
+  assert.deepStrictEqual(C.normalizeSplits(base), [50, 30, 10, 10]);
+  for (let i = 0; i < 200; i++) {
+    const s = [0, 1, 2, 3, 4].map(() => ({ percent: Math.floor(Math.random() * 60) }));
+    const idx = i % 5;
+    assert.strictEqual(sum(C.balanceSplits(s, idx, Math.floor(Math.random() * 120))), 100);
+  }
+  console.log('✓ savings & goals split always totals 100%');
+}
