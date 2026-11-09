@@ -142,6 +142,45 @@ test('CSV export holds data points only', () => {
   assert.strictEqual(csv, 'date,merchant,amount,currency,category\n2026-11-01,"A, B",5,AUD,Dining & cafés');
 });
 
+test('mixed OCR separators with a 3-digit tail are thousands, not decimals', () => {
+  assert.strictEqual(rc.parseMoney('1,180.521'), 1180521);
+  assert.strictEqual(rc.parseMoney('1.180,521'), 1180521);
+  assert.strictEqual(rc.parseMoney('1,234.56'), 1234.56);
+});
+
+test('supermarket: brands in line items are ignored; store found from footer web address', () => {
+  // Logo is unreadable (stylised), a product line names a coffee brand,
+  // and the store only appears in the e-invoice web address at the bottom.
+  const text = `NV Wii
+PHIEU TINH TIEN
+NGOC NUONG Gao thom 3       52,900
+COCOXIM Nuoc dua xanh 1L    49,500
+LISTERINE NSM              185,600
+OLDSPICE sap khu mui       190,900
+SCOTCH BRITE MRC            49,500
+TRUNG NGUYEN Cafe xay       95,000
+Chuoi Fesepia               32,159
+WINECO Ca chua do 500g      26,900
+Ot cay 25g                   4,900
+Mui ta 50g                   8,500
+FAMERS UNION SC Hy Lap     239,000
+TONG TIEN HANG  -9,800   1,180.521
+Tien can thanh toan      1,180.521
+Truy cap xuathoadon.wlnrnart.vn trong 60 phut
+de xuat hoa don`;
+  const r = rc.parseReceiptText(text, { defaultCurrency: 'AUD', today: TODAY });
+  assert.strictEqual(r.merchant, 'WinMart');
+  assert.strictEqual(r.category, 'groceries');
+  assert.strictEqual(r.amount, 1180521);
+  assert.strictEqual(r.currency, 'VND');
+  assert.strictEqual(r.confidence, 'high');
+});
+
+test('OCR look-alike glyphs still match brands', () => {
+  assert.strictEqual(rc.categorise('Co1es Bondi', ''), 'groceries');
+  assert.strictEqual(rc.extractMerchant('WlNRNART\nsomething').name, 'WinMart');
+});
+
 // Regression: real Tesseract (eng+vie) output from generated, blurred, rotated receipt photos.
 // Note the OCR's own errors (0→9 in vn_pho's date and prices) — the parser must degrade gracefully.
 const fs = require('fs');

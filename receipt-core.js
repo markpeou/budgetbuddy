@@ -200,7 +200,10 @@
     const lastComma = s.lastIndexOf(',');
 
     if (lastDot >= 0 && lastComma >= 0) {
-      // Both present: whichever comes last is the decimal separator.
+      // OCR often mixes separators ("1,180.521"). Exactly 3 digits after the
+      // last one means it's a thousands group too, not decimals.
+      if (/[.,]\d{3}$/.test(s)) return Number(s.replace(/[.,]/g, ''));
+      // Otherwise whichever comes last is the decimal separator.
       const decSep = lastDot > lastComma ? '.' : ',';
       const thouSep = decSep === '.' ? ',' : '.';
       s = s.split(thouSep).join('').replace(decSep, '.');
@@ -308,20 +311,85 @@
     return new RegExp(`(^|[^a-z0-9])${escapeRe(w)}([^a-z0-9]|$)`).test(haystack);
   }
 
+  /**
+   * OCR confuses look-alike glyphs ("WinMart" → "Wlnrnart"). Compare brand keys
+   * and text on the same reduced "skeleton" so those still match.
+   */
+  function skeleton(str) {
+    return fold(str)
+      .replace(/rn/g, 'm')
+      .replace(/vv/g, 'w')
+      .replace(/[l1|!]/g, 'i')
+      .replace(/0/g, 'o')
+      .replace(/\s+/g, ' ');
+  }
+
+  const BRAND_SKELETONS = KNOWN_MERCHANTS.map(([key, name, category]) => ({
+    key: skeleton(key).trim(),
+    name,
+    category,
+  }));
+
   function findKnownMerchant(text) {
-    const f = fold(text).replace(/\s+/g, ' ');
-    for (const [key, name, category] of KNOWN_MERCHANTS) {
-      if (hasWord(f, key)) return { name, category };
+    const f = skeleton(text);
+    for (const b of BRAND_SKELETONS) {
+      if (hasWord(f, b.key)) return { name: b.name, category: b.category };
     }
     return null;
   }
 
-  const NOT_MERCHANT = /(receipt|tax invoice|invoice|hoa don|phieu|bien nhan|abn|mst|ma so thue|tel|phone|dien thoai|dt:|date|ngay|time|gio|cashier|thu ngan|table|ban so|order|www\.|http|@|address|dia chi|welcome|xin chao|cam on|thank)/;
+  const DOMAIN_RE = /([a-z0-9-]+)\.(?:com\.vn|com\.au|net\.au|vn|com|au)\b/g;
+  const IGNORE_DOMAINS = /^(www|gov|facebook|fb|zalo|google|gmail|youtube|instagram|tiktok|hoadon|einvoice|xuathoadon|tracuu|tracuuhoadon|vnpt|viettel-?invoice|misa|meinvoice|bkav)$/;
+
+  /** Store web addresses usually survive OCR better than stylised logos. */
+  function domainLabels(text) {
+    const out = [];
+    const f = fold(text);
+    let m;
+    DOMAIN_RE.lastIndex = 0;
+    while ((m = DOMAIN_RE.exec(f))) {
+      if (!IGNORE_DOMAINS.test(m[1]) && m[1].length >= 3) out.push(m[1]);
+    }
+    return out;
+  }
+
+  /** A line ending in a price: "Phin Sữa Đá x2 78.000", "MILK 2L 3.10". Not times or dates. */
+  const PRICE_AT_END = /(?:\d{1,3}(?:[.,]\d{3})+|\d+[.,]\d{2})\s*(?:đ|₫|vnd|vnđ|d)?\s*$/i;
+
+  function splitLines(text) {
+    return String(text || '').split(/\r?\n/).map((l) => l.trim()).filter(Boolean);
+  }
+
+  /**
+   * Find the store's brand without being fooled by products: supermarket line
+   * items name brands too ("TRUNG NGUYÊN Cafe xay" at WinMart). Only the
+   * header, the footer and the store's web address count.
+   */
+  function findBrandInReceipt(text) {
+    const lines = splitLines(text);
+    // Header = above the first priced line; footer = below the last one.
+    const priced = lines.map((l) => PRICE_AT_END.test(l));
+    const first = priced.indexOf(true);
+    const last = priced.lastIndexOf(true);
+    const header = lines.slice(0, Math.min(first < 0 ? 8 : first, 8)).join('\n');
+    const footer = last < 0 ? '' : lines.slice(last + 1).slice(-6).join('\n');
+    const inHeader = findKnownMerchant(header);
+    if (inHeader) return inHeader;
+    const inFooter = findKnownMerchant(footer);
+    if (inFooter) return inFooter;
+    for (const label of domainLabels(text)) {
+      const known = findKnownMerchant(label);
+      if (known) return known;
+    }
+    return null;
+  }
+
+  const NOT_MERCHANT = /(^nv\b|mat hang|receipt|tax invoice|invoice|hoa don|phieu|bien nhan|abn|mst|ma so thue|tel|phone|dien thoai|dt:|date|ngay|time|gio|cashier|thu ngan|table|ban so|order|www\.|http|@|address|dia chi|welcome|xin chao|cam on|thank)/;
 
   function extractMerchant(text) {
-    const known = findKnownMerchant(text);
+    const known = findBrandInReceipt(text);
     if (known) return { name: known.name, knownCategory: known.category };
-    const lines = String(text || '').split(/\r?\n/).map((l) => l.trim()).filter(Boolean);
+    const lines = splitLines(text);
     for (const line of lines.slice(0, 6)) {
       const letters = (line.match(/\p{L}/gu) || []).length;
       if (letters < 3) continue;
@@ -329,6 +397,8 @@
       if (letters / line.length < 0.5) continue; // mostly digits/symbols → address or noise
       return { name: tidyName(line), knownCategory: null };
     }
+    const label = domainLabels(text)[0];
+    if (label) return { name: label.charAt(0).toUpperCase() + label.slice(1), knownCategory: null };
     return { name: '', knownCategory: null };
   }
 
@@ -377,8 +447,9 @@
   function categorise(merchant, fullText, learned) {
     const key = fold(merchant).trim();
     if (key && learned && learned[key]) return learned[key];
-    const known = findKnownMerchant(merchant) || findKnownMerchant(fullText || '');
+    const known = findKnownMerchant(merchant) || findBrandInReceipt(fullText || '');
     if (known) return known.category;
+    const pricedLines = splitLines(fullText).filter((l) => moneyTokens(l).length).length;
     const hay = fold(merchant + ' ' + (fullText || '')).replace(/\s+/g, ' ');
     let best = 'other';
     let bestScore = 0;
@@ -386,6 +457,8 @@
       let score = 0;
       // Words in the merchant name count triple: "Phở Hòa" beats a stray "water" line.
       for (const w of words) if (hasWord(hay, w)) score += hasWord(key, w) ? 3 : 1;
+      // A long itemised receipt is almost always a supermarket shop.
+      if (cat === 'groceries' && pricedLines >= 10) score += 4;
       if (score > bestScore) {
         best = cat;
         bestScore = score;

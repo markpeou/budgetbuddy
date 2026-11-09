@@ -1732,6 +1732,25 @@ td .money-input-wrap {
   grid-column: 1 / -1;
 }
 
+/* Same height for every review field; iOS draws date inputs taller and wider. */
+.receipt-review .cell-input {
+  height: 38px;
+}
+
+.receipt-review input[type='date'] {
+  -webkit-appearance: none;
+  appearance: none;
+  display: block;
+  width: 100%;
+  min-width: 0;
+  text-align: left;
+}
+
+.receipt-review input[type='date']::-webkit-date-and-time-value {
+  text-align: left;
+  margin: 0;
+}
+
 .receipt-review-actions {
   display: flex;
   gap: 8px;
@@ -1935,6 +1954,12 @@ td .money-input-wrap {
 @media (max-width: 640px) {
   .receipt-review-grid {
     grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  /* 16px stops iOS Safari zooming the page when a field is tapped. */
+  .receipt-review .cell-input {
+    font-size: 16px;
+    height: 44px;
   }
 
   .receipt-charts {

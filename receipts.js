@@ -186,7 +186,11 @@
         setStatus('Loading the on-device reader (first time only, ~15 MB)…', 'busy');
         await loadScript(TESSERACT_SRC);
         // English + Vietnamese so accented receipts read properly.
-        return window.Tesseract.createWorker(['eng', 'vie']);
+        const worker = await window.Tesseract.createWorker(['eng', 'vie']);
+        // Tesseract.js defaults to "single block" (6), which garbles receipt
+        // headers and logos. Automatic layout (3) reads real receipt photos best.
+        await worker.setParameters({ tessedit_pageseg_mode: '3' });
+        return worker;
       })().catch((err) => {
         ocrWorkerPromise = null;
         throw err;
@@ -328,8 +332,8 @@
     els.review.dataset.editing = editingId || '';
     els.reviewTitle.textContent = editingId ? 'Edit expense' : 'Check the details';
     els.merchant.value = data.merchant || '';
-    els.amount.value = Number.isFinite(data.amount) ? String(data.amount) : '';
     ensureCurrencyOption(data.currency);
+    els.amount.value = Number.isFinite(data.amount) ? formatAmountInput(data.amount, data.currency) : '';
     els.currency.value = data.currency || getReportingCurrency();
     els.date.value = data.date || RC.todayIso();
     els.date.max = RC.todayIso();
@@ -337,6 +341,15 @@
     els.review.hidden = false;
     els.review.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
     (Number.isFinite(data.amount) ? els.merchant : els.amount).focus({ preventScroll: true });
+  }
+
+  /** "1180521" → "1,180,521" so the amount is easy to check against the receipt. */
+  function formatAmountInput(amount, code) {
+    const decimals = getCurrencyMeta(code || getReportingCurrency()).decimals;
+    return Number(amount).toLocaleString('en-US', {
+      minimumFractionDigits: Number.isInteger(amount) ? 0 : decimals,
+      maximumFractionDigits: decimals,
+    });
   }
 
   function closeReview() {
