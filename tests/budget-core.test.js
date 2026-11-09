@@ -158,3 +158,48 @@ if (process.exitCode) {
 } else {
   console.log('\nAll tests passed.');
 }
+
+test('currency catalogue covers active currencies with names, symbols and decimals', () => {
+  const cat = core.buildCurrencyCatalog([{ code: 'AUD', name: 'Australian Dollar', symbol: 'A$', decimals: 2 }]);
+  const by = Object.fromEntries(cat.map((c) => [c.code, c]));
+  assert.ok(cat.length >= 150, `only ${cat.length}`);
+  assert.strictEqual(by.AUD.symbol, 'A$', 'overrides kept');
+  assert.strictEqual(by.VND.decimals, 0);
+  assert.strictEqual(by.JPY.decimals, 0);
+  assert.strictEqual(by.GBP.symbol, '£');
+  assert.strictEqual(by.KWD.decimals, 3);
+  assert.ok(/Swiss/.test(by.CHF.name));
+  assert.notStrictEqual(by.CAD.symbol, '$', 'never an ambiguous bare $ for non-USD dollars');
+});
+
+test('default currency from device locale', () => {
+  assert.strictEqual(core.currencyForLocales(['en-AU', 'en']), 'AUD');
+  assert.strictEqual(core.currencyForLocales(['vi-VN']), 'VND');
+  assert.strictEqual(core.currencyForLocales(['de-DE']), 'EUR');
+  assert.strictEqual(core.currencyForLocales(['en'], 'USD'), 'USD');
+});
+
+test('majority currency: by value, sticky, count fallback, empty fallback', () => {
+  const rates = { VND: 1, AUD: 1 / 17000 }; // units per VND
+  const toVnd = (a, c) => (c in rates ? a / rates[c] : NaN);
+  const entries = [
+    { amount: 15000000, currency: 'VND' },
+    { amount: 4000000, currency: 'VND' },
+    { amount: 450, currency: 'AUD' }, // ≈ ₫7.65M
+  ];
+  const r = core.majorityCurrency(entries, toVnd, { fallback: 'USD' });
+  assert.strictEqual(r.code, 'VND');
+  assert.ok(r.share > 0.7 && r.share < 0.72);
+
+  // AUD slightly ahead of current VND (within 20%) → stay on VND
+  const close = [{ amount: 10000000, currency: 'VND' }, { amount: 700, currency: 'AUD' }]; // AUD ≈ ₫11.9M
+  assert.strictEqual(core.majorityCurrency(close, toVnd, { current: 'VND', fallback: 'USD' }).code, 'VND');
+  assert.strictEqual(core.majorityCurrency(close, toVnd, { fallback: 'USD' }).code, 'AUD');
+
+  // No rates for one currency → compare by count
+  const noRate = [{ amount: 5, currency: 'XYZ' }, { amount: 1, currency: 'VND' }, { amount: 2, currency: 'VND' }];
+  const c = core.majorityCurrency(noRate, toVnd, { fallback: 'USD' });
+  assert.deepStrictEqual([c.code, c.basis], ['VND', 'count']);
+
+  assert.strictEqual(core.majorityCurrency([], toVnd, { fallback: 'AUD' }).code, 'AUD');
+});

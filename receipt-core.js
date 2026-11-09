@@ -284,9 +284,9 @@
   /** Reject amounts that can't be a receipt total in this currency (e.g. ₫60). */
   function plausibleTotal(n, currency) {
     if (!Number.isFinite(n) || n <= 0) return false;
-    if (currency === 'VND') return n >= 1000 && n < 1e9;
-    if (currency === 'KRW' || currency === 'JPY') return n >= 10 && n < 1e8;
-    return n >= 0.1 && n < 1e6;
+    // Smallest believable receipt in high-denomination currencies (rules out "₫60").
+    const MIN = { VND: 1000, IDR: 500, LAK: 500, IRR: 1000, UZS: 500, KHR: 100, MMK: 50, KRW: 10, JPY: 10 };
+    return n >= (MIN[currency] || 0.01) && n < 1e10;
   }
 
   function extractTotal(text, currency) {

@@ -98,6 +98,17 @@ const SUPPORTED_CURRENCIES = [
   { code: 'THB', name: 'Thai Baht', symbol: '฿', decimals: 2 },
 ];
 
+// Extend the hand-picked list (kept for their nicer symbols: A$, S$) to every
+// currency in circulation, using the browser's own currency data.
+if (Core && Core.buildCurrencyCatalog) {
+  try {
+    const full = Core.buildCurrencyCatalog(SUPPORTED_CURRENCIES);
+    SUPPORTED_CURRENCIES.splice(0, SUPPORTED_CURRENCIES.length, ...full);
+  } catch (e) {
+    /* keep the short list */
+  }
+}
+
 let chartInstance = null;
 /** @type {Record<string, number> | null} */
 let vndRatesCache = null;
@@ -116,10 +127,19 @@ let currentSplits = Core
 
 const SCENARIO_STORAGE_KEY = 'budgetPlannerScenarios_v1';
 const INCOME_CURRENCY_STORAGE_KEY = 'budgetPlannerIncomeCurrency_v1';
-const EXPENSE_CURRENCY_STORAGE_KEY = 'budgetPlannerExpenseCurrency_v1';
+// v2: reporting currency now defaults to "auto" for everyone.
+const EXPENSE_CURRENCY_STORAGE_KEY = 'budgetPlannerExpenseCurrency_v2';
 
-const DEFAULT_INCOME_CURRENCY = 'USD';
-const DEFAULT_EXPENSE_CURRENCY = 'VND';
+/** Income starts in the currency of the device's region (en-AU → AUD, vi-VN → VND). */
+const DEFAULT_INCOME_CURRENCY =
+  Core && Core.currencyForLocales && typeof navigator !== 'undefined'
+    ? Core.currencyForLocales(navigator.languages || [navigator.language], 'USD')
+    : 'USD';
+/** Reporting currency "auto" = whichever currency holds most of your expenses. */
+const AUTO_CURRENCY = 'auto';
+const DEFAULT_EXPENSE_CURRENCY = AUTO_CURRENCY;
+const RECEIPTS_STORAGE_KEY = 'budgetBuddyReceipts_v1';
+let autoReporting = { code: null, share: 0, basis: 'none' };
 
 const CHART_COLORS = ['#7B14EF', '#00B4A0', '#FFC845', '#C026D3', '#E5E7EB'];
 
@@ -250,7 +270,61 @@ function getIncomeCurrency() {
 /** Reporting currency for combined expense totals (storage key kept for compat). */
 function getReportingCurrency() {
   const code = expenseCurrencySelect && expenseCurrencySelect.value;
-  return isSupportedCurrency(code) ? code : DEFAULT_EXPENSE_CURRENCY;
+  if (isSupportedCurrency(code)) return code;
+  return autoReporting.code || getIncomeCurrency();
+}
+
+function isAutoReporting() {
+  return !expenseCurrencySelect || !isSupportedCurrency(expenseCurrencySelect.value);
+}
+
+/** Raw choice for saving: a currency code or "auto". */
+function getReportingChoice() {
+  return isAutoReporting() ? AUTO_CURRENCY : expenseCurrencySelect.value;
+}
+
+/**
+ * Work out the "auto" reporting currency from everything captured: planned
+ * expense rows (monthly) plus receipts from the last 30 days.
+ */
+function resolveAutoReporting() {
+  if (!isAutoReporting() || !Core || !Core.majorityCurrency) return;
+  const entries = [];
+  [fixedExpensesBody, variableExpensesBody, subscriptionsBody].forEach((tbody) => {
+    if (!tbody) return;
+    tbody.querySelectorAll('tr.expense-row').forEach((tr) => {
+      const cur = tr.querySelector('.expense-currency-select');
+      const amt = tr.querySelector('.expense-amount-input');
+      const freq = tr.querySelector('.expense-freq-select');
+      if (!cur || !amt) return;
+      entries.push({
+        currency: cur.value,
+        amount: frequencyToMonthly(parseAmount(amt.value), freq ? freq.value : 'monthly'),
+      });
+    });
+  });
+  try {
+    const since = new Date(Date.now() - 30 * 86400000).toISOString().slice(0, 10);
+    const receipts = JSON.parse(localStorage.getItem(RECEIPTS_STORAGE_KEY) || '[]');
+    receipts
+      .filter((r) => r && r.date >= since)
+      .forEach((r) => entries.push({ currency: r.currency, amount: Number(r.amount) }));
+  } catch (e) {
+    /* receipts are optional */
+  }
+  autoReporting = Core.majorityCurrency(entries, (a, c) => toVnd(a, c), {
+    current: autoReporting.code,
+    fallback: getIncomeCurrency(),
+  });
+  updateAutoOptionLabel();
+}
+
+function updateAutoOptionLabel() {
+  const opt = expenseCurrencySelect && expenseCurrencySelect.querySelector('option[value="auto"]');
+  if (!opt) return;
+  const code = autoReporting.code || getIncomeCurrency();
+  const meta = getCurrencyMeta(code);
+  opt.textContent = `Auto · ${meta.symbol} ${code}`;
 }
 
 function getExpenseCurrency() {
@@ -273,7 +347,8 @@ function formatInCurrency(amount, code) {
     maximumFractionDigits: decimals,
   });
   const sign = rounded < 0 ? '-' : '';
-  return `${sign}${meta.symbol}${formatted}`;
+  const gap = /[A-Za-z]$/.test(meta.symbol) ? ' ' : '';
+  return `${sign}${meta.symbol}${gap}${formatted}`;
 }
 
 function toVnd(amount, code) {
@@ -317,7 +392,7 @@ function frequencyToMonthly(amount, frequency) {
 function saveCurrencyPreferences() {
   try {
     localStorage.setItem(INCOME_CURRENCY_STORAGE_KEY, getIncomeCurrency());
-    localStorage.setItem(EXPENSE_CURRENCY_STORAGE_KEY, getReportingCurrency());
+    localStorage.setItem(EXPENSE_CURRENCY_STORAGE_KEY, getReportingChoice());
   } catch (e) {
     /* ignore */
   }
@@ -325,18 +400,41 @@ function saveCurrencyPreferences() {
 
 function populateCurrencySelectOptions(sel, selectedCode, options = {}) {
   if (!sel) return;
-  const { short = false } = options;
+  const { short = false, auto = false } = options;
   const current = selectedCode || sel.value;
   sel.innerHTML = '';
-  SUPPORTED_CURRENCIES.forEach((c) => {
+  const label = (c) => (short ? `${c.symbol} ${c.code}` : `${c.symbol} ${c.code} — ${c.name}`);
+  const option = (c) => {
     const opt = document.createElement('option');
     opt.value = c.code;
-    opt.textContent = short
-      ? `${c.symbol} ${c.code}`
-      : `${c.symbol} ${c.code} — ${c.name}`;
+    opt.textContent = label(c);
+    return opt;
+  };
+
+  if (auto) {
+    const opt = document.createElement('option');
+    opt.value = AUTO_CURRENCY;
+    opt.textContent = 'Auto';
     sel.appendChild(opt);
-  });
-  if (isSupportedCurrency(current)) sel.value = current;
+  }
+
+  // Common currencies first (plus the device's own), then everything A–Z.
+  const commonCodes = [
+    ...new Set([DEFAULT_INCOME_CURRENCY, ...((Core && Core.COMMON_CURRENCIES) || [])]),
+  ].filter(isSupportedCurrency);
+  const common = document.createElement('optgroup');
+  common.label = 'Common';
+  commonCodes.forEach((code) => common.appendChild(option(getCurrencyMeta(code))));
+  const all = document.createElement('optgroup');
+  all.label = 'All currencies';
+  SUPPORTED_CURRENCIES.filter((c) => !commonCodes.includes(c.code))
+    .sort((a, b) => a.name.localeCompare(b.name))
+    .forEach((c) => all.appendChild(option(c)));
+  sel.appendChild(common);
+  sel.appendChild(all);
+
+  if (isSupportedCurrency(current) || (auto && current === AUTO_CURRENCY)) sel.value = current;
+  if (auto) updateAutoOptionLabel();
 }
 
 function populateCurrencySelects() {
@@ -351,10 +449,10 @@ function populateCurrencySelects() {
     /* ignore */
   }
   if (!isSupportedCurrency(incomeCode)) incomeCode = DEFAULT_INCOME_CURRENCY;
-  if (!isSupportedCurrency(expenseCode)) expenseCode = DEFAULT_EXPENSE_CURRENCY;
+  if (!isSupportedCurrency(expenseCode)) expenseCode = AUTO_CURRENCY;
 
   populateCurrencySelectOptions(incomeCurrencySelect, incomeCode);
-  populateCurrencySelectOptions(expenseCurrencySelect, expenseCode);
+  populateCurrencySelectOptions(expenseCurrencySelect, expenseCode, { auto: true });
 }
 
 function updateDualColumnVisibility() {
@@ -419,10 +517,12 @@ function updateCurrencyHeaders() {
   }
 
   if (incomeHintEl) {
-    if (currenciesDiffer()) {
-      incomeHintEl.textContent = `Enter salary in ${incomeMeta.name} (${incomeCode}). Expense totals report in ${reportingMeta.name} (${reportingCode}).`;
+    if (!currenciesDiffer()) {
+      incomeHintEl.textContent = `Enter your pay in ${incomeMeta.name} (${incomeCode}). Each expense can use its own currency.`;
+    } else if (isAutoReporting()) {
+      incomeHintEl.textContent = `Enter your pay in ${incomeMeta.name} (${incomeCode}). Totals show in ${reportingMeta.name} (${reportingCode}), where most of your expenses are.`;
     } else {
-      incomeHintEl.textContent = `Enter salary in ${incomeMeta.name} (${incomeCode}). Each expense can still use its own currency.`;
+      incomeHintEl.textContent = `Enter your pay in ${incomeMeta.name} (${incomeCode}). Totals show in ${reportingMeta.name} (${reportingCode}).`;
     }
   }
 
@@ -448,16 +548,22 @@ function updateRateHints() {
   }
 
   if (expenseRateHintEl) {
+    const autoNote =
+      isAutoReporting() && autoReporting.share > 0
+        ? `${Math.round(autoReporting.share * 100)}% of your expenses are in ${reportingCode}. `
+        : isAutoReporting()
+          ? `Using ${reportingCode} until you add expenses. `
+          : '';
     if (!currenciesDiffer()) {
-      expenseRateHintEl.textContent = '';
+      expenseRateHintEl.textContent = autoNote;
     } else if (!vndRatesCache) {
-      expenseRateHintEl.textContent = 'Rates needed for cross-currency totals.';
+      expenseRateHintEl.textContent = autoNote + 'Rates needed for cross-currency totals.';
     } else {
       const oneIncomeInReporting = convert(1, incomeCode, reportingCode);
       if (Number.isFinite(oneIncomeInReporting)) {
-        expenseRateHintEl.textContent = `1 ${incomeCode} ≈ ${formatInCurrency(oneIncomeInReporting, reportingCode)}`;
+        expenseRateHintEl.textContent = `${autoNote}1 ${incomeCode} ≈ ${formatInCurrency(oneIncomeInReporting, reportingCode)}`;
       } else {
-        expenseRateHintEl.textContent = '';
+        expenseRateHintEl.textContent = autoNote;
       }
     }
   }
@@ -1312,6 +1418,7 @@ function formatAggTotal(agg) {
 }
 
 function recomputeAll() {
+  resolveAutoReporting();
   const { perMonth: incomePerMonth, perMonthVnd: incomePerMonthVnd } = updateIncome();
   const incomeCode = getIncomeCurrency();
   const reportingCode = getReportingCurrency();
@@ -1528,7 +1635,7 @@ function collectScenarioData() {
     salaryAmount: salaryAmountInput.value,
     salaryFrequency: salaryFrequencySelect.value,
     incomeCurrency: getIncomeCurrency(),
-    expenseCurrency: getReportingCurrency(),
+    expenseCurrency: getReportingChoice(),
     fixed: rowsFrom(fixedExpensesBody),
     variable: rowsFrom(variableExpensesBody),
     subs: rowsFrom(subscriptionsBody),
@@ -1701,7 +1808,8 @@ function applyScenarioData(rawData) {
   let incomeCode = data.incomeCurrency;
   let expenseCode = data.expenseCurrency;
   if (!isSupportedCurrency(incomeCode)) incomeCode = DEFAULT_INCOME_CURRENCY;
-  if (!isSupportedCurrency(expenseCode)) expenseCode = DEFAULT_EXPENSE_CURRENCY;
+  if (!isSupportedCurrency(expenseCode)) expenseCode = AUTO_CURRENCY;
+  autoReporting = { code: null, share: 0, basis: 'none' };
 
   if (incomeCurrencySelect) incomeCurrencySelect.value = incomeCode;
   if (expenseCurrencySelect) expenseCurrencySelect.value = expenseCode;

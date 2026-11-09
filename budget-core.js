@@ -294,8 +294,139 @@
       .reduce((sum, s) => sum + (Number(s.percent) || 0), 0);
   }
 
+  // ---------------------------------------------------------------------------
+  // Currencies: full catalogue, locale defaults, "Auto" reporting currency
+  // ---------------------------------------------------------------------------
+
+  /** Currencies in circulation (ISO 4217), matching what the rates service quotes. */
+  const ACTIVE_CURRENCIES = (
+    'AED AFN ALL AMD AOA ARS AUD AWG AZN BAM BBD BDT BGN BHD BIF BMD BND BOB BRL BSD BTN BWP ' +
+    'BYN BZD CAD CDF CHF CLP CNY COP CRC CUP CVE CZK DJF DKK DOP DZD EGP ERN ETB EUR FJD FKP ' +
+    'GBP GEL GHS GIP GMD GNF GTQ GYD HKD HNL HTG HUF IDR ILS INR IQD IRR ISK JMD JOD JPY KES ' +
+    'KGS KHR KMF KRW KWD KYD KZT LAK LBP LKR LRD LSL LYD MAD MDL MGA MKD MMK MNT MOP MRU MUR ' +
+    'MVR MWK MXN MYR MZN NAD NGN NIO NOK NPR NZD OMR PAB PEN PGK PHP PKR PLN PYG QAR RON RSD ' +
+    'RUB RWF SAR SBD SCR SDG SEK SGD SHP SLE SOS SRD SSP STN SYP SZL THB TJS TMT TND TOP TRY ' +
+    'TTD TWD TZS UAH UGX USD UYU UZS VES VND VUV WST XAF XCD XOF XPF YER ZAR ZMW'
+  ).split(' ');
+
+  /** Shown first in every currency picker. */
+  const COMMON_CURRENCIES = [
+    'AUD', 'VND', 'USD', 'EUR', 'GBP', 'NZD', 'SGD', 'THB', 'JPY', 'KRW',
+    'CNY', 'HKD', 'MYR', 'IDR', 'PHP', 'INR', 'CAD', 'CHF',
+  ];
+
+  /**
+   * Build {code, name, symbol, decimals} for every active currency using the
+   * platform's own currency data. `overrides` keeps hand-picked symbols (A$, S$).
+   */
+  function buildCurrencyCatalog(overrides = [], locale = 'en') {
+    const byCode = new Map(overrides.map((c) => [c.code, c]));
+    let names = null;
+    try {
+      names = new Intl.DisplayNames([locale], { type: 'currency' });
+    } catch (e) {
+      /* old browser: fall back to codes */
+    }
+    for (const code of ACTIVE_CURRENCIES) {
+      if (byCode.has(code)) continue;
+      try {
+        const fmt = (display) =>
+          new Intl.NumberFormat(locale, { style: 'currency', currency: code, currencyDisplay: display });
+        const symbolOf = (f) => (f.formatToParts(1).find((p) => p.type === 'currency') || {}).value || code;
+        let symbol = symbolOf(fmt('symbol'));
+        if (symbol === code) {
+          // Prefer a distinctive narrow symbol (฿, ₱, ₹) — but never a bare "$" that hides which dollar.
+          const narrow = symbolOf(fmt('narrowSymbol'));
+          if (narrow !== code && narrow !== '$') symbol = narrow;
+        }
+        byCode.set(code, {
+          code,
+          name: (names && names.of(code)) || code,
+          symbol,
+          decimals: fmt('symbol').resolvedOptions().maximumFractionDigits,
+        });
+      } catch (e) {
+        byCode.set(code, { code, name: code, symbol: code, decimals: 2 });
+      }
+    }
+    return [...byCode.values()];
+  }
+
+  /** Region → currency for picking a sensible default from the device locale. */
+  const EURO_REGIONS = 'AT BE CY DE EE ES FI FR GR HR IE IT LT LU LV MT NL PT SI SK'.split(' ');
+  const REGION_CURRENCY = {
+    AU: 'AUD', VN: 'VND', US: 'USD', GB: 'GBP', NZ: 'NZD', SG: 'SGD', TH: 'THB', JP: 'JPY',
+    KR: 'KRW', CN: 'CNY', HK: 'HKD', TW: 'TWD', MY: 'MYR', ID: 'IDR', PH: 'PHP', IN: 'INR',
+    CA: 'CAD', CH: 'CHF', KH: 'KHR', LA: 'LAK', MM: 'MMK', AE: 'AED', SA: 'SAR', ZA: 'ZAR',
+    MX: 'MXN', BR: 'BRL', SE: 'SEK', NO: 'NOK', DK: 'DKK', PL: 'PLN', CZ: 'CZK', HU: 'HUF',
+    TR: 'TRY', IL: 'ILS', AR: 'ARS', CL: 'CLP', CO: 'COP', PE: 'PEN', EG: 'EGP', NG: 'NGN',
+    KE: 'KES', PK: 'PKR', BD: 'BDT', LK: 'LKR', NP: 'NPR', MO: 'MOP', FJ: 'FJD',
+  };
+
+  /** "en-AU" → "AUD"; tries each preferred language in order. */
+  function currencyForLocales(locales, fallback = 'USD') {
+    for (const tag of locales || []) {
+      let region = null;
+      try {
+        const loc = new Intl.Locale(tag);
+        region = loc.region || (loc.maximize && loc.maximize().region);
+      } catch (e) {
+        const m = String(tag).match(/[-_]([A-Za-z]{2})\b/);
+        region = m && m[1];
+      }
+      if (!region) continue;
+      region = region.toUpperCase();
+      if (REGION_CURRENCY[region]) return REGION_CURRENCY[region];
+      if (EURO_REGIONS.includes(region)) return 'EUR';
+    }
+    return fallback;
+  }
+
+  /**
+   * Which currency holds the majority of spending?
+   * @param {Array<{amount:number, currency:string}>} entries  monthly amounts
+   * @param {(amount:number, code:string) => number} toBase  common base (NaN if no rate)
+   * @param {{current?:string, fallback:string}} opts
+   * Weighs by value when rates are available, otherwise by number of entries.
+   * Sticks with `current` unless another currency is clearly bigger (20% margin),
+   * so totals don't flip back and forth while someone is typing.
+   */
+  function majorityCurrency(entries, toBase, opts) {
+    const { current, fallback } = opts;
+    const valued = new Map();
+    const counted = new Map();
+    let canValue = true;
+    for (const e of entries || []) {
+      const amt = Number(e.amount);
+      if (!e.currency || !Number.isFinite(amt) || amt <= 0) continue;
+      counted.set(e.currency, (counted.get(e.currency) || 0) + 1);
+      const v = toBase(amt, e.currency);
+      if (!Number.isFinite(v)) canValue = false;
+      else valued.set(e.currency, (valued.get(e.currency) || 0) + v);
+    }
+    const weights = canValue ? valued : counted;
+    if (!weights.size) return { code: fallback, share: 0, basis: 'none' };
+
+    let total = 0;
+    let leader = null;
+    for (const [code, w] of weights) {
+      total += w;
+      if (!leader || w > weights.get(leader)) leader = code;
+    }
+    let code = leader;
+    if (current && weights.has(current) && weights.get(leader) <= weights.get(current) * 1.2) {
+      code = current;
+    }
+    return { code, share: total ? weights.get(code) / total : 0, basis: canValue ? 'value' : 'count' };
+  }
+
   return {
     DEFAULT_SPLITS,
+    ACTIVE_CURRENCIES,
+    COMMON_CURRENCIES,
+    buildCurrencyCatalog,
+    currencyForLocales,
+    majorityCurrency,
     frequencyToMonthly,
     incomeToWeekly,
     incomeNormalized,

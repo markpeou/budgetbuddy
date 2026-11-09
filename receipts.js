@@ -749,13 +749,8 @@
   }
 
   function fillCurrencySelect() {
-    els.currency.innerHTML = '';
-    for (const c of SUPPORTED_CURRENCIES) {
-      const o = document.createElement('option');
-      o.value = c.code;
-      o.textContent = `${c.code} (${c.symbol})`;
-      els.currency.appendChild(o);
-    }
+    // Same grouped list as the rest of the app (common first, then A–Z).
+    populateCurrencySelectOptions(els.currency, getReportingCurrency(), { short: true });
   }
 
   function ensureCurrencyOption(code) {

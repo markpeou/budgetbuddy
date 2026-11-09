@@ -199,6 +199,8 @@ test('implausible VND totals are rejected', () => {
   assert.strictEqual(rc.plausibleTotal(521, 'VND'), false);
   assert.strictEqual(rc.plausibleTotal(93000, 'VND'), true);
   assert.strictEqual(rc.plausibleTotal(4.5, 'AUD'), true);
+  assert.strictEqual(rc.plausibleTotal(150000, 'IDR'), true);
+  assert.strictEqual(rc.plausibleTotal(2500000, 'AUD'), true);
 });
 
 test('item lines are never used as the shop name; blank beats a guess', () => {
