@@ -1260,3 +1260,61 @@ body:not([data-view='app']) {
     font-size: 17px;
   }
 }
+
+/* Returning visitors: a quiet way back into their budget, above the two ways in. */
+.welcome-back {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  margin-bottom: 16px;
+  padding: 16px 20px;
+  border-radius: 16px;
+  border: 1px solid var(--color-line);
+  background: var(--color-bg-surface);
+  color: var(--text);
+  text-decoration: none;
+  transition: border-color 0.16s ease, box-shadow 0.16s ease;
+}
+
+.welcome-back[hidden] {
+  display: none;
+}
+
+.welcome-back:hover {
+  border-color: #d9d5e6;
+  box-shadow: 0 8px 22px rgba(26, 26, 46, 0.07);
+}
+
+.welcome-back-text {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+
+.welcome-back-kicker {
+  color: var(--muted);
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.welcome-back-name {
+  overflow: hidden;
+  font-size: 17px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.welcome-back-figure {
+  color: var(--muted);
+  font-size: 14px;
+  font-variant-numeric: tabular-nums;
+}
+
+.welcome-back-cta {
+  flex-shrink: 0;
+  color: var(--color-brand-primary);
+  font-size: 15px;
+  font-weight: 600;
+}

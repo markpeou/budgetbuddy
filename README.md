@@ -12,7 +12,7 @@ countries, including international moves and ongoing bills back home.
 - Normalize income and expenses across common payment frequencies.
 - Enter expenses in different currencies and report a combined total.
 - Create custom budget splits and compare them with actual spending.
-- Save and restore scenarios in the current browser.
+- Save and restore scenarios in the current browser. The working budget autosaves between visits, and a prompt under the Summary offers to name it (or update the scenario you changed).
 - View summary tables and a spending chart.
 
 ## Live site

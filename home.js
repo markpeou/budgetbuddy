@@ -317,6 +317,37 @@
     }
   });
 
+  // ---------------------------------------------------------------------------
+  // Returning visitors: one tap back into their budget
+  // ---------------------------------------------------------------------------
+
+  function renderWelcomeBack(d) {
+    const card = $('welcomeBack');
+    if (!card || !d) return;
+    let saved = false;
+    try {
+      saved = Boolean(localStorage.getItem('budgetBuddyDraft_v1') || JSON.parse(localStorage.getItem('budgetPlannerScenarios_v1') || '{}').scenarios?.length);
+    } catch (e) {
+      /* ignore */
+    }
+    const income = d.income || 0;
+    if (!saved || income <= 0 || typeof formatInCurrency !== 'function') {
+      card.hidden = true;
+      return;
+    }
+    const left = income - (d.fixed || 0) - (d.variable || 0) - (d.subs || 0) - (d.goals || 0);
+    const sel = $('scenarioLoadSelect');
+    const name = sel && sel.value && sel.selectedOptions[0] ? sel.selectedOptions[0].textContent : 'Your budget';
+    $('welcomeBackName').textContent = name;
+    $('welcomeBackFigure').textContent = d.expensesOk === false
+      ? ''
+      : left >= 0
+        ? `${formatInCurrency(left, d.incomeCode)} left over a month`
+        : `${formatInCurrency(-left, d.incomeCode)} short a month`;
+    card.hidden = false;
+  }
+  document.addEventListener('budget:recompute', (e) => renderWelcomeBack(e.detail));
+
   const close = $('journeyBannerClose');
   if (close) close.addEventListener('click', hideBanner);
   document.addEventListener('budget:view', () => setNavCurrent('app'));

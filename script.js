@@ -154,6 +154,13 @@ const LOCAL_CURRENCY = (() => {
 const AUTO_CURRENCY = 'auto';
 const DEFAULT_EXPENSE_CURRENCY = AUTO_CURRENCY;
 const RECEIPTS_STORAGE_KEY = 'budgetBuddyReceipts_v1';
+// Working draft (autosaved budget) and the save prompt; see the bottom of this file.
+const DRAFT_STORAGE_KEY = 'budgetBuddyDraft_v1';
+const SAVE_PROMPT_DISMISS_KEY = 'budgetBuddySavePromptDismissed';
+let draftReady = false;
+let draftTimer = null;
+let draftEdited = false; // only an actual edit (or scenario switch) writes the draft
+
 let autoReporting = { code: null, share: 0, basis: 'none' };
 
 const CHART_COLORS = ['#7B14EF', '#00B4A0', '#FFC845', '#C026D3', '#E5E7EB'];
@@ -1838,6 +1845,11 @@ function saveScenario() {
     setScenarioStatus('Enter a name before creating.');
     return;
   }
+  createScenario(name);
+}
+
+/** Save the current budget as a new named scenario and select it. */
+function createScenario(name) {
   const store = getScenariosStore();
   const id =
     typeof crypto !== 'undefined' && crypto.randomUUID
@@ -2002,9 +2014,13 @@ if (!store.scenarios.length) {
   seedDefaultRows();
 }
 
+// Unsaved work from last time wins over the last saved scenario.
+restoreDraft();
+
 updateCurrencyHeaders();
 recomputeAll();
 loadExchangeRates();
+draftReady = true;
 
 if (scenarioSaveBtn) scenarioSaveBtn.addEventListener('click', saveScenario);
 if (scenarioNewBtn) scenarioNewBtn.addEventListener('click', showCreateScenario);
@@ -2017,3 +2033,214 @@ if (scenarioLoadSelect) {
 if (scenarioDeleteBtn) {
   scenarioDeleteBtn.addEventListener('click', deleteSelectedScenario);
 }
+
+// ---------------------------------------------------------------------------
+// Working draft: every change is kept in this browser, so nothing is lost
+// between visits even if it's never named. Naming it (a scenario) is the
+// prompt's job below.
+// ---------------------------------------------------------------------------
+
+
+function loadDraft() {
+  try {
+    return JSON.parse(localStorage.getItem(DRAFT_STORAGE_KEY) || 'null');
+  } catch (e) {
+    return null;
+  }
+}
+
+function draftHasContent(data) {
+  const d = data || {};
+  const anyAmount = ['fixed', 'variable', 'subs'].some((k) => (d[k] || []).some((r) => parseAmount(r.amount) > 0));
+  return parseAmount(d.salaryAmount) > 0 || anyAmount;
+}
+
+function restoreDraft() {
+  const draft = loadDraft();
+  if (!draft || !draft.data) return;
+  // An empty draft never replaces a saved scenario.
+  if (!draftHasContent(draft.data) && getScenariosStore().scenarios.length) return;
+  applyScenarioData(draft.data);
+  const known = getScenariosStore().scenarios.some((sc) => sc.id === draft.scenarioId);
+  if (known) refreshScenarioUI({ selectId: draft.scenarioId });
+  else if (scenarioLoadSelect) scenarioLoadSelect.value = '';
+  setScenarioStatus('');
+}
+
+function saveDraftNow() {
+  if (!draftReady || !draftEdited) return;
+  try {
+    localStorage.setItem(
+      DRAFT_STORAGE_KEY,
+      JSON.stringify({
+        data: collectScenarioData(),
+        scenarioId: (scenarioLoadSelect && scenarioLoadSelect.value) || null,
+        savedAt: new Date().toISOString(),
+      })
+    );
+  } catch (e) {
+    /* storage blocked: nothing we can do */
+  }
+}
+
+function scheduleDraftSave() {
+  if (!draftReady) return;
+  draftEdited = true;
+  clearTimeout(draftTimer);
+  draftTimer = setTimeout(() => {
+    saveDraftNow();
+    updateSavePrompt();
+  }, 400);
+}
+
+/** Comparable shape of a budget, ignoring formatting and empty rows. */
+function canonicalBudget(raw) {
+  const d = (Core ? Core.migrateScenarioData(raw) : raw) || {};
+  const rows = (list) =>
+    (list || [])
+      .map((r) => [String(r.name || '').trim(), r.frequency || 'monthly', r.currency || '', parseAmount(r.amount)])
+      .filter((r) => r[3] > 0 || r[0]);
+  return JSON.stringify({
+    s: parseAmount(d.salaryAmount),
+    f: d.salaryFrequency || 'monthly',
+    ic: d.incomeCurrency,
+    ec: d.expenseCurrency,
+    rows: [rows(d.fixed), rows(d.variable), rows(d.subs)],
+    splits: (d.splits || []).map((x) => [String(x.label || '').trim(), Number(x.percent) || 0]),
+  });
+}
+
+function selectedScenario() {
+  const id = scenarioLoadSelect && scenarioLoadSelect.value;
+  return id ? getScenariosStore().scenarios.find((sc) => sc.id === id) || null : null;
+}
+
+function hasMeaningfulBudget() {
+  if (parseAmount(salaryAmountInput && salaryAmountInput.value) <= 0) return false;
+  return [...document.querySelectorAll('tr.expense-row .expense-amount-input')].some((i) => parseAmount(i.value) > 0);
+}
+
+// ---------------------------------------------------------------------------
+// Save prompt (under the Summary): name this budget, or update the scenario
+// you've changed.
+// ---------------------------------------------------------------------------
+
+const savePromptEl = document.getElementById('savePrompt');
+
+function updateSavePrompt() {
+  if (!savePromptEl) return;
+  let dismissed = false;
+  try {
+    dismissed = sessionStorage.getItem(SAVE_PROMPT_DISMISS_KEY) === '1';
+  } catch (e) {
+    /* ignore */
+  }
+  const sc = selectedScenario();
+  const dirty = sc ? canonicalBudget(collectScenarioData()) !== canonicalBudget(sc.data) : true;
+  const show = draftReady && !dismissed && hasMeaningfulBudget() && dirty;
+  savePromptEl.hidden = !show;
+  if (!show) return;
+  const title = document.getElementById('savePromptTitle');
+  const sub = document.getElementById('savePromptSub');
+  document.getElementById('savePromptForm').hidden = Boolean(sc);
+  document.getElementById('savePromptChanged').hidden = !sc;
+  if (sc) {
+    title.textContent = `You’ve changed “${sc.name}”`;
+    sub.textContent = 'Your changes are kept in this browser. Update the scenario, or keep both versions.';
+    document.getElementById('savePromptUpdate').textContent = `Update “${sc.name}”`;
+  } else {
+    title.textContent = 'Keep this budget';
+    sub.textContent = 'Give it a name to save it as a scenario. Come back to it any time, or compare versions.';
+  }
+}
+
+function flashScenarioSaved(msg) {
+  const done = document.getElementById('savePromptDone');
+  if (!done) return;
+  done.textContent = msg;
+  done.hidden = false;
+  clearTimeout(flashScenarioSaved.t);
+  flashScenarioSaved.t = setTimeout(() => {
+    done.hidden = true;
+  }, 4000);
+}
+
+if (savePromptEl) {
+  const form = document.getElementById('savePromptForm');
+  const nameInput = document.getElementById('savePromptName');
+  form.addEventListener('submit', (e) => {
+    e.preventDefault();
+    const name = nameInput.value.trim();
+    if (!name) {
+      nameInput.focus();
+      nameInput.setAttribute('aria-invalid', 'true');
+      return;
+    }
+    nameInput.removeAttribute('aria-invalid');
+    createScenario(name);
+    nameInput.value = '';
+    draftEdited = true;
+    saveDraftNow();
+    updateSavePrompt();
+    flashScenarioSaved(`Saved as “${name}”. It’ll be here next time.`);
+  });
+  document.getElementById('savePromptUpdate').addEventListener('click', () => {
+    const sc = selectedScenario();
+    if (!sc) return;
+    const all = getScenariosStore();
+    const target = all.scenarios.find((x) => x.id === sc.id);
+    target.data = collectScenarioData();
+    target.savedAt = new Date().toISOString();
+    saveScenariosStore(all);
+    draftEdited = true;
+    saveDraftNow();
+    updateSavePrompt();
+    setScenarioStatus(`Updated “${sc.name}”.`);
+    flashScenarioSaved(`Updated “${sc.name}”.`);
+  });
+  document.getElementById('savePromptNew').addEventListener('click', () => {
+    document.getElementById('savePromptForm').hidden = false;
+    document.getElementById('savePromptChanged').hidden = true;
+    if (scenarioLoadSelect) scenarioLoadSelect.value = '';
+    nameInput.focus();
+  });
+  document.getElementById('savePromptClose').addEventListener('click', () => {
+    try {
+      sessionStorage.setItem(SAVE_PROMPT_DISMISS_KEY, '1');
+    } catch (e) {
+      /* ignore */
+    }
+    savePromptEl.hidden = true;
+  });
+}
+
+// Every edit in the planner (amounts, names, splits, currencies, picking a
+// scenario) saves the draft. Exchange-rate refreshes alone don't.
+['input', 'change'].forEach((type) =>
+  document.addEventListener(type, (e) => {
+    if (e.target.closest && e.target.closest('[data-panel]') && !e.target.closest('#savePrompt')) scheduleDraftSave();
+  })
+);
+// Picking or deleting a scenario changes what "changed" means.
+if (scenarioLoadSelect) scenarioLoadSelect.addEventListener('change', () => setTimeout(updateSavePrompt, 0));
+if (scenarioDeleteBtn) {
+  scenarioDeleteBtn.addEventListener('click', () =>
+    setTimeout(() => {
+      draftEdited = true;
+      saveDraftNow();
+      updateSavePrompt();
+    }, 0)
+  );
+}
+if (scenarioSaveBtn) {
+  scenarioSaveBtn.addEventListener('click', () =>
+    setTimeout(() => {
+      draftEdited = true;
+      saveDraftNow();
+      updateSavePrompt();
+    }, 0)
+  );
+}
+// Last chance before the tab closes.
+window.addEventListener('pagehide', saveDraftNow);
+updateSavePrompt();

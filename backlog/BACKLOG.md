@@ -14,7 +14,6 @@ Parked ideas, roughly in priority order. Move an item into work by opening an is
 
 ## Journey calculators
 
-- **Keep the budget between visits.** The planner only keeps what's entered for the session unless it's saved as a scenario, so calculators fall back to typed figures on a return visit. Autosave the current budget.
 - Savings goal: several goals at once, each with its own target.
 
 ## Summary (after OCR is reliable)

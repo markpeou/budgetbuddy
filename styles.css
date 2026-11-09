@@ -2775,3 +2775,92 @@ body.sheet-open .tab-bar {
   opacity: 0.5;
   cursor: not-allowed;
 }
+
+/* Save prompt under the Summary: name this budget, or update a changed scenario. */
+.save-prompt {
+  position: relative;
+  margin: 16px 0 8px;
+  padding: 16px 44px 16px 16px;
+  border-radius: var(--radius-md);
+  border: 1px solid #e6d8fd;
+  background: #f6f0ff;
+}
+
+.save-prompt[hidden],
+.save-prompt-done[hidden],
+.save-prompt-form[hidden],
+.save-prompt-changed[hidden] {
+  display: none;
+}
+
+.save-prompt-title {
+  margin: 0;
+  font-size: 15px;
+  font-weight: 700;
+  color: var(--text);
+}
+
+.save-prompt-sub {
+  margin: 4px 0 12px;
+  font-size: 13px;
+  line-height: 1.5;
+  color: var(--muted);
+}
+
+.save-prompt-form,
+.save-prompt-changed {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.save-prompt-form .cell-input {
+  flex: 1 1 180px;
+  height: 40px;
+  background: var(--color-bg-surface);
+}
+
+.save-prompt .btn {
+  margin-top: 0;
+}
+
+.save-prompt-close {
+  position: absolute;
+  top: 8px;
+  right: 8px;
+  width: 32px;
+  height: 32px;
+  border: 0;
+  border-radius: 8px;
+  background: transparent;
+  color: var(--muted);
+  cursor: pointer;
+}
+
+.save-prompt-close:hover {
+  background: rgba(26, 26, 46, 0.06);
+  color: var(--text);
+}
+
+.save-prompt-done {
+  margin: 12px 0 0;
+  padding: 10px 12px;
+  border-radius: var(--radius-md);
+  background: var(--color-success-soft);
+  color: var(--color-success);
+  font-size: 13px;
+  font-weight: 600;
+}
+
+@media (max-width: 900px) {
+  .save-prompt-form .cell-input {
+    height: 44px;
+    font-size: 16px;
+  }
+
+  .save-prompt-form .btn,
+  .save-prompt-changed .btn {
+    flex: 1 1 auto;
+    width: auto;
+  }
+}

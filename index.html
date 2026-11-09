@@ -12,8 +12,8 @@
       href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700&display=swap"
       rel="stylesheet"
     />
-    <link rel="stylesheet" href="./styles.css?v=20261109u" />
-    <link rel="stylesheet" href="./home.css?v=20261109u" />
+    <link rel="stylesheet" href="./styles.css?v=20261109x" />
+    <link rel="stylesheet" href="./home.css?v=20261109x" />
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
   </head>
   <body data-view="home">
@@ -166,6 +166,15 @@
       <main class="site-view view-home" id="view-home" data-view="home" aria-labelledby="homeTitle">
         <section class="hero">
           <h1 class="sr-only" id="homeTitle">What would you like to do?</h1>
+
+          <a class="welcome-back" id="welcomeBack" href="#summary" hidden>
+            <span class="welcome-back-text">
+              <span class="welcome-back-kicker">Pick up where you left off</span>
+              <strong class="welcome-back-name" id="welcomeBackName">Your budget</strong>
+              <span class="welcome-back-figure" id="welcomeBackFigure"></span>
+            </span>
+            <span class="welcome-back-cta">Continue <span aria-hidden="true">→</span></span>
+          </a>
 
           <div class="entry-grid">
             <a class="entry-card entry-card--guided" href="#journeys">
@@ -627,6 +636,22 @@
             <ul class="overview-rows" id="overviewRows"></ul>
           </div>
 
+          <div class="save-prompt" id="savePrompt" hidden>
+            <button type="button" class="save-prompt-close" id="savePromptClose" aria-label="Not now">✕</button>
+            <p class="save-prompt-title" id="savePromptTitle">Keep this budget</p>
+            <p class="save-prompt-sub" id="savePromptSub"></p>
+            <form class="save-prompt-form" id="savePromptForm">
+              <label class="sr-only" for="savePromptName">Scenario name</label>
+              <input type="text" id="savePromptName" class="cell-input" placeholder="e.g. Saigon 2026" maxlength="40" autocomplete="off" />
+              <button type="submit" class="btn">Save</button>
+            </form>
+            <div class="save-prompt-changed" id="savePromptChanged" hidden>
+              <button type="button" class="btn" id="savePromptUpdate">Update</button>
+              <button type="button" class="btn btn-ghost" id="savePromptNew">Save as new</button>
+            </div>
+          </div>
+          <p class="save-prompt-done" id="savePromptDone" role="status" hidden></p>
+
           <details class="summary-details" id="summaryDetails">
             <summary>Show all numbers</summary>
           <table class="table table-compact table-summary">
@@ -947,14 +972,14 @@
     </nav>
 
     <script src="./icons.js"></script>
-    <script src="./budget-core.js?v=20261109u"></script>
-    <script src="./script.js?v=20261109u"></script>
-    <script src="./receipt-core.js?v=20261109u"></script>
-    <script src="./receipts.js?v=20261109u"></script>
-    <script src="./nav.js?v=20261109u"></script>
-    <script src="./overview.js?v=20261109u"></script>
-    <script src="./journey-core.js?v=20261109u"></script>
-    <script src="./journeys.js?v=20261109u"></script>
-    <script src="./home.js?v=20261109u"></script>
+    <script src="./budget-core.js?v=20261109x"></script>
+    <script src="./script.js?v=20261109x"></script>
+    <script src="./receipt-core.js?v=20261109x"></script>
+    <script src="./receipts.js?v=20261109x"></script>
+    <script src="./nav.js?v=20261109x"></script>
+    <script src="./overview.js?v=20261109x"></script>
+    <script src="./journey-core.js?v=20261109x"></script>
+    <script src="./journeys.js?v=20261109x"></script>
+    <script src="./home.js?v=20261109x"></script>
   </body>
 </html>
