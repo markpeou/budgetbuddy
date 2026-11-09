@@ -2020,3 +2020,295 @@ td .money-input-wrap {
     font-size: 12px;
   }
 }
+
+/* ==========================================================================
+   Phone navigation — tab bar, money strip, expense chips
+   Desktop (>900px) keeps the single long page; these are hidden there.
+   ========================================================================== */
+
+.money-strip,
+.tab-bar,
+.group-switcher,
+.group-add {
+  display: none;
+}
+
+.group-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 10px;
+}
+
+.group-head .subsection-heading {
+  margin: 0;
+}
+
+.row-new {
+  animation: row-flash 1.2s ease;
+}
+
+@keyframes row-flash {
+  0%,
+  40% {
+    background: var(--color-brand-primary-soft);
+  }
+  100% {
+    background: transparent;
+  }
+}
+
+@media (max-width: 900px) {
+  body {
+    padding-bottom: calc(76px + env(safe-area-inset-bottom));
+  }
+
+  .app {
+    margin-top: 0;
+    padding-top: calc(8px + env(safe-area-inset-top));
+  }
+
+  .panel-off,
+  .group-off {
+    display: none !important;
+  }
+
+  /* Pinned figures */
+  .money-strip {
+    position: sticky;
+    top: 0;
+    z-index: 20;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    margin: 0 -12px 12px;
+    padding: calc(10px + env(safe-area-inset-top)) 16px 10px;
+    margin-top: calc(-8px - env(safe-area-inset-top));
+    background: rgba(255, 255, 255, 0.94);
+    -webkit-backdrop-filter: blur(12px);
+    backdrop-filter: blur(12px);
+    border-bottom: 1px solid var(--border);
+    cursor: pointer;
+    -webkit-tap-highlight-color: transparent;
+  }
+
+  .money-strip-main {
+    display: flex;
+    flex-direction: column;
+    min-width: 0;
+  }
+
+  .money-strip-label {
+    font-size: 11px;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    color: var(--muted);
+  }
+
+  .money-strip-main strong {
+    font-size: 20px;
+    font-weight: 700;
+    letter-spacing: -0.02em;
+    font-variant-numeric: tabular-nums;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+
+  .money-strip[data-state='ok'] .money-strip-main strong {
+    color: var(--color-success);
+  }
+
+  .money-strip[data-state='over'] .money-strip-main strong {
+    color: var(--color-danger);
+  }
+
+  .money-strip-sub {
+    display: flex;
+    flex-direction: column;
+    align-items: flex-end;
+    gap: 2px;
+    font-size: 12px;
+    color: var(--muted);
+    min-width: 0;
+  }
+
+  .money-strip-sub strong {
+    color: var(--text);
+    font-weight: 600;
+    font-variant-numeric: tabular-nums;
+  }
+
+  /* Bottom tab bar */
+  .tab-bar {
+    position: fixed;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    z-index: 30;
+    display: grid;
+    grid-template-columns: repeat(5, minmax(0, 1fr));
+    align-items: end;
+    padding: 6px 4px calc(6px + env(safe-area-inset-bottom));
+    background: rgba(255, 255, 255, 0.96);
+    -webkit-backdrop-filter: blur(12px);
+    backdrop-filter: blur(12px);
+    border-top: 1px solid var(--border);
+    transition: transform 0.2s ease;
+  }
+
+  body.is-typing .tab-bar {
+    transform: translateY(110%);
+  }
+
+  .tab-btn {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 3px;
+    min-height: 48px;
+    padding: 4px 0;
+    border: none;
+    background: none;
+    color: var(--muted);
+    font-family: var(--font-family);
+    font-size: 11px;
+    font-weight: 600;
+    cursor: pointer;
+    -webkit-tap-highlight-color: transparent;
+  }
+
+  .tab-btn.is-active {
+    color: var(--color-brand-primary);
+  }
+
+  .tab-btn:focus-visible {
+    outline: none;
+    color: var(--color-brand-primary);
+  }
+
+  .tab-scan-circle {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 52px;
+    height: 52px;
+    margin-top: -22px;
+    border-radius: 50%;
+    background: var(--gradient-brand);
+    color: #fff;
+    box-shadow: 0 6px 16px rgba(123, 20, 239, 0.35);
+    border: 3px solid #fff;
+  }
+
+  .tab-btn--scan {
+    color: var(--text);
+  }
+
+  .tab-btn--scan:active .tab-scan-circle {
+    transform: scale(0.94);
+  }
+
+  /* Expense type chips */
+  .group-switcher {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 6px;
+    margin: 4px 0 14px;
+  }
+
+  .group-chip {
+    display: flex;
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 2px;
+    min-width: 0;
+    padding: 8px 10px;
+    border-radius: var(--radius-md);
+    border: 1px solid var(--border);
+    background: var(--color-bg-surface);
+    font-family: var(--font-family);
+    text-align: left;
+    cursor: pointer;
+    -webkit-tap-highlight-color: transparent;
+  }
+
+  .group-chip span {
+    font-size: 12px;
+    font-weight: 600;
+    color: var(--muted);
+  }
+
+  .group-chip strong {
+    max-width: 100%;
+    font-size: 13px;
+    font-weight: 700;
+    color: var(--text);
+    font-variant-numeric: tabular-nums;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+
+  .group-chip.is-active {
+    border-color: var(--color-brand-primary);
+    background: var(--color-brand-primary-soft);
+  }
+
+  .group-chip.is-active span {
+    color: var(--color-brand-primary);
+  }
+
+  /* One list at a time: drop the divider between groups */
+  .expense-group:not(:first-of-type) {
+    margin-top: 0;
+    padding-top: 0;
+    border-top: none;
+  }
+
+  .group-add {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    min-height: 36px;
+    padding: 0 14px;
+    border-radius: 999px;
+    border: none;
+    background: var(--color-brand-primary);
+    color: #fff;
+    font-family: var(--font-family);
+    font-size: 13px;
+    font-weight: 600;
+    cursor: pointer;
+  }
+}
+
+@media (max-width: 900px) {
+  /* Phone order: what you came to do first, settings after. */
+  .app {
+    display: flex;
+    flex-direction: column;
+  }
+
+  .money-strip { order: -10; }
+  .card-income { order: 1; }
+  .card-scenarios { order: 2; }
+  .card-expenses { order: 3; }
+  .layout-two-column { order: 4; }
+  .card-split { order: 5; }
+  .card-receipts { order: 6; }
+
+  /* The money strip replaces the big header on phones. */
+  .app-header {
+    display: none;
+  }
+
+  /* Was flex-basis 200px, which became 200px of height in the column layout. */
+  .scenario-name-wrap {
+    flex: 0 0 auto;
+    max-width: none;
+  }
+}
