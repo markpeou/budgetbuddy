@@ -203,3 +203,18 @@ test('majority currency: by value, sticky, count fallback, empty fallback', () =
 
   assert.strictEqual(core.majorityCurrency([], toVnd, { fallback: 'AUD' }).code, 'AUD');
 });
+
+// Time zone → local currency
+{
+  const C = require('../budget-core.js');
+  const assert = require('assert');
+  assert.strictEqual(C.currencyForTimeZone('Asia/Ho_Chi_Minh'), 'VND');
+  assert.strictEqual(C.currencyForTimeZone('Asia/Saigon'), 'VND');
+  assert.strictEqual(C.currencyForTimeZone('Australia/Sydney'), 'AUD');
+  assert.strictEqual(C.currencyForTimeZone('Australia/Some_New_Zone'), 'AUD');
+  assert.strictEqual(C.currencyForTimeZone('Europe/Paris'), 'EUR');
+  assert.strictEqual(C.currencyForTimeZone('America/Los_Angeles'), 'USD');
+  assert.strictEqual(C.currencyForTimeZone('Mars/Olympus', 'USD'), 'USD');
+  assert.strictEqual(C.currencyForTimeZone(undefined), null);
+  console.log('✓ currencyForTimeZone maps zones to local currency');
+}

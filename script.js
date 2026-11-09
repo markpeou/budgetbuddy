@@ -135,7 +135,22 @@ const DEFAULT_INCOME_CURRENCY =
   Core && Core.currencyForLocales && typeof navigator !== 'undefined'
     ? Core.currencyForLocales(navigator.languages || [navigator.language], 'USD')
     : 'USD';
-/** Reporting currency "auto" = whichever currency holds most of your expenses. */
+/**
+ * Where the device is right now, from its time zone (no permission prompt).
+ * An Aussie phone in Saigon → VND, even though income defaults to AUD.
+ */
+const LOCAL_CURRENCY = (() => {
+  try {
+    const tz = Intl.DateTimeFormat().resolvedOptions().timeZone;
+    return (Core && Core.currencyForTimeZone && Core.currencyForTimeZone(tz)) || DEFAULT_INCOME_CURRENCY;
+  } catch (e) {
+    return DEFAULT_INCOME_CURRENCY;
+  }
+})();
+/**
+ * Reporting currency "auto" = the currency where you are, until your expenses
+ * say otherwise (then whichever currency holds most of them).
+ */
 const AUTO_CURRENCY = 'auto';
 const DEFAULT_EXPENSE_CURRENCY = AUTO_CURRENCY;
 const RECEIPTS_STORAGE_KEY = 'budgetBuddyReceipts_v1';
@@ -271,7 +286,12 @@ function getIncomeCurrency() {
 function getReportingCurrency() {
   const code = expenseCurrencySelect && expenseCurrencySelect.value;
   if (isSupportedCurrency(code)) return code;
-  return autoReporting.code || getIncomeCurrency();
+  return autoReporting.code || autoFallbackCurrency();
+}
+
+/** With no expenses yet, Auto uses the currency where you are. */
+function autoFallbackCurrency() {
+  return isSupportedCurrency(LOCAL_CURRENCY) ? LOCAL_CURRENCY : getIncomeCurrency();
 }
 
 function isAutoReporting() {
@@ -314,7 +334,7 @@ function resolveAutoReporting() {
   }
   autoReporting = Core.majorityCurrency(entries, (a, c) => toVnd(a, c), {
     current: autoReporting.code,
-    fallback: getIncomeCurrency(),
+    fallback: autoFallbackCurrency(),
   });
   updateAutoOptionLabel();
 }
@@ -322,7 +342,7 @@ function resolveAutoReporting() {
 function updateAutoOptionLabel() {
   const opt = expenseCurrencySelect && expenseCurrencySelect.querySelector('option[value="auto"]');
   if (!opt) return;
-  const code = autoReporting.code || getIncomeCurrency();
+  const code = autoReporting.code || autoFallbackCurrency();
   const meta = getCurrencyMeta(code);
   opt.textContent = `Auto · ${meta.symbol} ${code}`;
 }
@@ -420,7 +440,7 @@ function populateCurrencySelectOptions(sel, selectedCode, options = {}) {
 
   // Common currencies first (plus the device's own), then everything A–Z.
   const commonCodes = [
-    ...new Set([DEFAULT_INCOME_CURRENCY, ...((Core && Core.COMMON_CURRENCIES) || [])]),
+    ...new Set([LOCAL_CURRENCY, DEFAULT_INCOME_CURRENCY, ...((Core && Core.COMMON_CURRENCIES) || [])]),
   ].filter(isSupportedCurrency);
   const common = document.createElement('optgroup');
   common.label = 'Common';
@@ -552,7 +572,9 @@ function updateRateHints() {
       isAutoReporting() && autoReporting.share > 0
         ? `${Math.round(autoReporting.share * 100)}% of your expenses are in ${reportingCode}. `
         : isAutoReporting()
-          ? `Using ${reportingCode} until you add expenses. `
+          ? reportingCode === LOCAL_CURRENCY
+            ? `Using ${reportingCode}, the currency where you are. `
+            : `Using ${reportingCode} until you add expenses. `
           : '';
     if (!currenciesDiffer()) {
       expenseRateHintEl.textContent = autoNote;
@@ -1540,7 +1562,97 @@ function recomputeAll() {
   }
 }
 
-function onCurrencyChange() {
+// ---------------------------------------------------------------------------
+// Picking a reporting currency offers to move existing expenses onto it.
+// New rows already start in the reporting currency; old rows only change if
+// the user says so (amounts convert at today's rate, never just relabel).
+// ---------------------------------------------------------------------------
+
+function expenseRowsNotIn(code) {
+  const rows = [];
+  [fixedExpensesBody, variableExpensesBody, subscriptionsBody].forEach((tbody) => {
+    if (!tbody) return;
+    tbody.querySelectorAll('tr.expense-row').forEach((tr) => {
+      const cur = tr.querySelector('.expense-currency-select');
+      const amt = tr.querySelector('.expense-amount-input');
+      if (cur && amt && cur.value !== code) rows.push({ tr, cur, amt, amount: parseAmount(amt.value) });
+    });
+  });
+  return rows;
+}
+
+function setRowCurrency(row, code, amount) {
+  row.cur.value = code;
+  if (amount !== undefined) {
+    const decimals = getCurrencyMeta(code).decimals;
+    row.amt.value = String(Number(amount.toFixed(decimals)));
+  }
+  row.cur.dispatchEvent(new Event('change'));
+}
+
+function hideCurrencyOffer() {
+  const el = document.getElementById('currencyOffer');
+  if (el) el.hidden = true;
+}
+
+function offerExpenseCurrencySwitch(code) {
+  const rows = expenseRowsNotIn(code);
+  // Empty rows just follow the new currency; nothing to decide.
+  rows.filter((r) => !(r.amount > 0)).forEach((r) => setRowCurrency(r, code));
+  const filled = rows.filter((r) => r.amount > 0);
+  const bar = expenseCurrencySelect && expenseCurrencySelect.closest('.currency-bar');
+  if (!bar) return;
+  let el = document.getElementById('currencyOffer');
+  if (!filled.length) {
+    hideCurrencyOffer();
+    return;
+  }
+  if (!el) {
+    el = document.createElement('div');
+    el.id = 'currencyOffer';
+    el.className = 'currency-offer';
+    el.setAttribute('role', 'status');
+    el.innerHTML = `
+      <p class="currency-offer-text"></p>
+      <div class="currency-offer-actions">
+        <button type="button" class="btn" data-act="convert"></button>
+        <button type="button" class="btn btn-ghost" data-act="keep">Keep as they are</button>
+      </div>`;
+    bar.insertAdjacentElement('afterend', el);
+    el.addEventListener('click', (e) => {
+      const act = e.target.closest('[data-act]');
+      if (!act) return;
+      const target = el.dataset.code;
+      if (act.dataset.act === 'convert') {
+        expenseRowsNotIn(target)
+          .filter((r) => r.amount > 0)
+          .forEach((r) => {
+            const converted = convert(r.amount, r.cur.value, target);
+            if (Number.isFinite(converted)) setRowCurrency(r, target, converted);
+          });
+        recomputeAll();
+      }
+      hideCurrencyOffer();
+    });
+  }
+  const others = [...new Set(filled.map((r) => r.cur.value))];
+  const n = filled.length;
+  el.dataset.code = code;
+  el.querySelector('.currency-offer-text').textContent =
+    `${n} expense${n === 1 ? ' is' : 's are'} in ${others.join(', ')}. Switch ${n === 1 ? 'it' : 'them'} to ${code} too?`;
+  const convertBtn = el.querySelector('[data-act="convert"]');
+  convertBtn.textContent = `Convert to ${code}`;
+  const canConvert = Boolean(vndRatesCache) && filled.every((r) => Number.isFinite(convert(r.amount, r.cur.value, code)));
+  convertBtn.disabled = !canConvert;
+  convertBtn.title = canConvert ? 'Amounts convert at today’s rate' : 'Waiting for exchange rates';
+  el.hidden = false;
+}
+
+function onCurrencyChange(e) {
+  if (e && e.target === expenseCurrencySelect) {
+    if (isAutoReporting()) hideCurrencyOffer();
+    else offerExpenseCurrencySwitch(expenseCurrencySelect.value);
+  }
   saveCurrencyPreferences();
   // Reporting / income currency change must NOT reinterpret native expense amounts.
   updateCurrencyHeaders();

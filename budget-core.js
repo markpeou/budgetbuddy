@@ -382,6 +382,54 @@
     return fallback;
   }
 
+  // Time zone → country, for "where you are right now" without asking for
+  // location permission. Covers the zones phones actually report; anything
+  // missing falls back to the language region.
+  const TZ_REGION = (() => {
+    const map = {};
+    const table = {
+      VN: 'Asia/Ho_Chi_Minh Asia/Saigon',
+      AU: 'Australia/Sydney Australia/Melbourne Australia/Brisbane Australia/Perth Australia/Adelaide Australia/Hobart Australia/Darwin Australia/Canberra Australia/ACT Australia/NSW Australia/Queensland Australia/Victoria Australia/West Australia/South Australia/Tasmania Australia/North Australia/Lord_Howe Australia/Broken_Hill Australia/Lindeman Australia/Currie Australia/Eucla',
+      NZ: 'Pacific/Auckland Pacific/Chatham NZ',
+      TH: 'Asia/Bangkok', KH: 'Asia/Phnom_Penh', LA: 'Asia/Vientiane', MM: 'Asia/Yangon Asia/Rangoon',
+      SG: 'Asia/Singapore Singapore', MY: 'Asia/Kuala_Lumpur Asia/Kuching',
+      ID: 'Asia/Jakarta Asia/Makassar Asia/Jayapura Asia/Pontianak', PH: 'Asia/Manila',
+      JP: 'Asia/Tokyo Japan', KR: 'Asia/Seoul ROK', CN: 'Asia/Shanghai Asia/Chongqing Asia/Harbin Asia/Urumqi PRC',
+      HK: 'Asia/Hong_Kong Hongkong', MO: 'Asia/Macau Asia/Macao', TW: 'Asia/Taipei ROC',
+      IN: 'Asia/Kolkata Asia/Calcutta', PK: 'Asia/Karachi', BD: 'Asia/Dhaka', LK: 'Asia/Colombo',
+      NP: 'Asia/Kathmandu Asia/Katmandu', AE: 'Asia/Dubai', SA: 'Asia/Riyadh', IL: 'Asia/Jerusalem Asia/Tel_Aviv Israel',
+      TR: 'Europe/Istanbul Asia/Istanbul Turkey',
+      GB: 'Europe/London Europe/Belfast GB', IE: 'Europe/Dublin', FR: 'Europe/Paris', DE: 'Europe/Berlin',
+      ES: 'Europe/Madrid Atlantic/Canary', IT: 'Europe/Rome', NL: 'Europe/Amsterdam', BE: 'Europe/Brussels',
+      PT: 'Europe/Lisbon Atlantic/Madeira Atlantic/Azores', AT: 'Europe/Vienna', GR: 'Europe/Athens',
+      FI: 'Europe/Helsinki', EE: 'Europe/Tallinn', LV: 'Europe/Riga', LT: 'Europe/Vilnius', LU: 'Europe/Luxembourg',
+      MT: 'Europe/Malta', CY: 'Asia/Nicosia Europe/Nicosia', SI: 'Europe/Ljubljana', SK: 'Europe/Bratislava',
+      HR: 'Europe/Zagreb', CH: 'Europe/Zurich', SE: 'Europe/Stockholm', NO: 'Europe/Oslo', DK: 'Europe/Copenhagen',
+      PL: 'Europe/Warsaw', CZ: 'Europe/Prague', HU: 'Europe/Budapest',
+      US: 'America/New_York America/Chicago America/Denver America/Los_Angeles America/Phoenix America/Anchorage America/Detroit America/Boise America/Indiana/Indianapolis America/Kentucky/Louisville Pacific/Honolulu US/Eastern US/Central US/Mountain US/Pacific US/Hawaii',
+      CA: 'America/Toronto America/Vancouver America/Edmonton America/Winnipeg America/Halifax America/St_Johns America/Regina America/Montreal',
+      MX: 'America/Mexico_City America/Cancun America/Tijuana America/Monterrey', BR: 'America/Sao_Paulo America/Manaus America/Fortaleza America/Recife',
+      AR: 'America/Argentina/Buenos_Aires America/Buenos_Aires', CL: 'America/Santiago', CO: 'America/Bogota', PE: 'America/Lima',
+      ZA: 'Africa/Johannesburg', EG: 'Africa/Cairo', NG: 'Africa/Lagos', KE: 'Africa/Nairobi', FJ: 'Pacific/Fiji',
+    };
+    Object.entries(table).forEach(([region, zones]) =>
+      zones.split(' ').forEach((z) => {
+        map[z] = region;
+      })
+    );
+    return map;
+  })();
+
+  /** Currency for an IANA time zone (e.g. Asia/Ho_Chi_Minh → VND), or fallback. */
+  function currencyForTimeZone(timeZone, fallback = null) {
+    let region = TZ_REGION[timeZone];
+    if (!region && /^Australia\//.test(timeZone || '')) region = 'AU';
+    if (!region) return fallback;
+    if (REGION_CURRENCY[region]) return REGION_CURRENCY[region];
+    if (EURO_REGIONS.includes(region)) return 'EUR';
+    return fallback;
+  }
+
   /**
    * Which currency holds the majority of spending?
    * @param {Array<{amount:number, currency:string}>} entries  monthly amounts
@@ -426,6 +474,7 @@
     COMMON_CURRENCIES,
     buildCurrencyCatalog,
     currencyForLocales,
+    currencyForTimeZone,
     majorityCurrency,
     frequencyToMonthly,
     incomeToWeekly,

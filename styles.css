@@ -2734,3 +2734,28 @@ body.sheet-open .tab-bar {
     display: none;
   }
 }
+
+/* Offer to move existing expenses onto a newly chosen reporting currency */
+.currency-offer {
+  margin: -4px 0 12px;
+  padding: 10px 12px;
+  border-radius: var(--radius-sm);
+  background: var(--color-accent-teal-soft);
+  font-size: 13px;
+}
+.currency-offer-text {
+  margin: 0 0 8px;
+  color: var(--text);
+}
+.currency-offer-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+.currency-offer-actions .btn {
+  margin-top: 0;
+}
+.currency-offer-actions .btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
