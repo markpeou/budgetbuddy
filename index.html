@@ -2,7 +2,8 @@
 <html lang="en">
   <head>
     <meta charset="UTF-8" />
-    <title>Budget Buddy</title>
+    <title>Budget Buddy · Clear answers to life’s money questions</title>
+    <meta name="description" content="A free place to get clear answers to life’s money questions. Guided journeys or straight-to-the-numbers calculators. No account needed." />
     <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
     <meta name="theme-color" content="#ffffff" />
     <link rel="preconnect" href="https://fonts.googleapis.com" />
@@ -11,10 +12,11 @@
       href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700&display=swap"
       rel="stylesheet"
     />
-    <link rel="stylesheet" href="./styles.css?v=20261109l" />
+    <link rel="stylesheet" href="./styles.css?v=20261109n" />
+    <link rel="stylesheet" href="./home.css?v=20261109n" />
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
   </head>
-  <body>
+  <body data-view="home">
     <svg xmlns="http://www.w3.org/2000/svg" class="icon-sprite" aria-hidden="true">
       <symbol id="icon-wallet" viewBox="0 0 24 24">
         <path d="M19 7V4a1 1 0 0 0-1-1H5a2 2 0 0 0 0 4h15a1 1 0 0 1 1 1v4h-3a2 2 0 0 0 0 4h3a1 1 0 0 0 1-1v-2a1 1 0 0 0-1-1" />
@@ -132,18 +134,138 @@
         </div>
       </div>
 
-      <header class="app-header">
-        <div class="app-header-title">
+      <header class="site-header">
+        <a class="brand" href="#home" aria-label="Budget Buddy home">
           <span class="icon-chip icon-chip--purple" aria-hidden="true">
             <svg class="icon" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><use href="#icon-wallet"/></svg>
           </span>
-          <h1>Budget Buddy</h1>
-        </div>
-        <p class="subtitle">
-          A warm, clear place to plan income and expenses across currencies —
-          whether you are settling in or still paying bills back home.
-        </p>
+          <span class="brand-name">Budget Buddy</span>
+        </a>
+        <nav class="site-nav" id="siteNav" aria-label="Main">
+          <a href="#home" data-nav="home">Home</a>
+          <a href="#calculators" data-nav="calculators">Calculators</a>
+          <a href="#journeys" data-nav="journeys">Financial journeys</a>
+          <a href="#about" data-nav="about">About</a>
+        </nav>
+        <button type="button" class="site-menu-btn" id="siteMenuBtn" aria-expanded="false" aria-controls="siteNav">Menu</button>
       </header>
+
+      <div class="journey-banner" id="journeyBanner" hidden>
+        <div class="journey-banner-body">
+          <p class="journey-banner-q" id="journeyBannerQ"></p>
+          <p class="journey-banner-guide" id="journeyBannerGuide"></p>
+        </div>
+        <div class="journey-banner-actions">
+          <a href="#journeys" class="journey-banner-link">All journeys</a>
+          <button type="button" class="journey-banner-close" id="journeyBannerClose" aria-label="Hide this guidance">✕</button>
+        </div>
+      </div>
+
+      <!-- Home: two ways in, common questions, and what we stand for -->
+      <main class="site-view view-home" id="view-home" data-view="home" aria-labelledby="homeTitle">
+        <section class="hero">
+          <p class="eyebrow">A free place to get clear answers to life’s money questions.</p>
+          <h1 class="hero-title" id="homeTitle">What would you like to do?</h1>
+          <p class="hero-lede">
+            Whether you want to understand your finances, plan for a big life change or simply run
+            some numbers, start wherever makes sense to you.
+          </p>
+
+          <div class="entry-grid">
+            <a class="entry-card entry-card--guided" href="#journeys">
+              <svg class="entry-visual entry-visual--paths" viewBox="0 0 220 90" aria-hidden="true">
+                <path d="M18 66 C 58 66, 62 24, 104 24 S 152 58, 202 30" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-dasharray="1 7" />
+                <path d="M104 24 C 128 24, 140 74, 176 74" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-dasharray="1 7" opacity="0.5" />
+                <circle cx="18" cy="66" r="7" class="node node--start" />
+                <circle cx="104" cy="24" r="6" class="node" />
+                <circle cx="176" cy="74" r="5" class="node node--faint" />
+                <circle cx="202" cy="30" r="9" class="node node--end" />
+              </svg>
+              <span class="entry-kicker">Guided</span>
+              <h2 class="entry-title">Help me understand my financial situation</h2>
+              <p class="entry-desc">Not sure where to start? Choose a question or situation and we’ll help you work through the numbers.</p>
+              <span class="entry-cta">Explore financial journeys <span aria-hidden="true">→</span></span>
+            </a>
+
+            <a class="entry-card entry-card--calc" href="#calculators">
+              <div class="entry-visual entry-visual--sum" aria-hidden="true">
+                <span>2,880</span>
+                <span>− 1,700</span>
+                <span class="sum-total">= 1,180</span>
+              </div>
+              <span class="entry-kicker">Direct</span>
+              <h2 class="entry-title">Just give me a calculator</h2>
+              <p class="entry-desc">Know what you want to work out? Go straight to the numbers and calculate it yourself.</p>
+              <span class="entry-cta">Open calculators <span aria-hidden="true">→</span></span>
+            </a>
+          </div>
+        </section>
+
+        <section class="home-questions" aria-labelledby="questionsTitle">
+          <h2 class="home-section-title" id="questionsTitle">Questions worth figuring out</h2>
+          <ul class="question-list" id="questionList"></ul>
+        </section>
+
+        <section class="home-trust" aria-labelledby="trustTitle">
+          <h2 class="home-section-title" id="trustTitle">Your finances. Your decisions. Your data.</h2>
+          <ul class="trust-list">
+            <li><strong>No account needed.</strong> Every calculator works straight away, without signing up.</li>
+            <li><strong>Clear, transparent maths.</strong> See <a href="#about">how the numbers work</a> and the assumptions behind them.</li>
+            <li><strong>Your information isn’t for sale.</strong> What you enter stays in this browser. We never sell it.</li>
+            <li><strong>Options, not instructions.</strong> Designed to help you understand your choices, not tell you what to do.</li>
+          </ul>
+        </section>
+      </main>
+
+      <main class="site-view view-list" id="view-journeys" data-view="journeys" aria-labelledby="journeysTitle">
+        <a class="back-link" href="#home">← Home</a>
+        <h1 class="page-title" id="journeysTitle">Financial journeys</h1>
+        <p class="page-lede">Pick the question closest to yours. We’ll open the right calculator and tell you what to fill in.</p>
+        <div id="journeyGroups"></div>
+      </main>
+
+      <main class="site-view view-list" id="view-calculators" data-view="calculators" aria-labelledby="calcTitle">
+        <a class="back-link" href="#home">← Home</a>
+        <h1 class="page-title" id="calcTitle">Calculators</h1>
+        <p class="page-lede">Go straight to the numbers. No sign-up and no questions first, and you can change every input.</p>
+        <ul class="tool-list" id="toolList"></ul>
+      </main>
+
+      <main class="site-view view-prose" id="view-soon" data-view="soon" aria-labelledby="soonTitle">
+        <a class="back-link" href="#journeys">← Financial journeys</a>
+        <p class="soon-pill">Coming soon</p>
+        <h1 class="page-title" id="soonTitle"></h1>
+        <p class="page-lede" id="soonWhat"></p>
+        <div class="soon-today">
+          <h2>What you can do today</h2>
+          <p id="soonToday"></p>
+          <a class="soon-today-link" id="soonTodayLink" href="#calculators"></a>
+        </div>
+      </main>
+
+      <main class="site-view view-prose" id="view-about" data-view="about" aria-labelledby="aboutTitle">
+        <a class="back-link" href="#home">← Home</a>
+        <h1 class="page-title" id="aboutTitle">About Budget Buddy</h1>
+        <p class="page-lede">A free place to get clear answers to life’s money questions: what things really cost, what’s left, and what changes if life does.</p>
+
+        <h2>How the numbers work</h2>
+        <ul>
+          <li>Everything is converted to a monthly figure first. Weekly amounts are ×52÷12, fortnightly ×26÷12, quarterly ÷3 and yearly ÷12.</li>
+          <li>Left over is your monthly income minus your expenses, minus what you set aside for savings and goals.</li>
+          <li>Savings &amp; goals are percentages of your income. The starting split (50% expenses, 30% long-term savings, 10% emergency fund, 10% investments) is only a suggestion until you change it.</li>
+          <li>Each expense can be in its own currency. Totals are converted using daily exchange rates from open.er-api.com, and show “—” if rates can’t be loaded rather than guessing.</li>
+        </ul>
+
+        <h2>Your data</h2>
+        <ul>
+          <li>No accounts and no database. What you enter and the scenarios you save live in this browser only.</li>
+          <li>Clearing your browser data removes them. Nothing is sold or shared.</li>
+          <li>If you use receipt reading, the photo is sent to be read and then discarded. Only the amount, place, date and category are kept.</li>
+        </ul>
+
+        <h2>What it isn’t</h2>
+        <p>Budget Buddy helps you understand your options. It isn’t financial advice and doesn’t tell you what to do.</p>
+      </main>
 
       <section class="card card-scenarios" data-panel="income">
         <h2 class="section-heading">
@@ -803,11 +925,12 @@
     </nav>
 
     <script src="./icons.js"></script>
-    <script src="./budget-core.js?v=20261109l"></script>
-    <script src="./script.js?v=20261109l"></script>
-    <script src="./receipt-core.js?v=20261109l"></script>
-    <script src="./receipts.js?v=20261109l"></script>
-    <script src="./nav.js?v=20261109l"></script>
-    <script src="./overview.js?v=20261109l"></script>
+    <script src="./budget-core.js?v=20261109n"></script>
+    <script src="./script.js?v=20261109n"></script>
+    <script src="./receipt-core.js?v=20261109n"></script>
+    <script src="./receipts.js?v=20261109n"></script>
+    <script src="./nav.js?v=20261109n"></script>
+    <script src="./overview.js?v=20261109n"></script>
+    <script src="./home.js?v=20261109n"></script>
   </body>
 </html>

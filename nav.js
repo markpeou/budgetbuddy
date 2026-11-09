@@ -49,9 +49,18 @@
   // Tabs
   // ---------------------------------------------------------------------------
 
+  /**
+   * Show a calculator tab. `silent` sets the tab up without leaving the
+   * current site view (used at load when the page opens on Home).
+   */
   function showTab(tab, opts = {}) {
     if (!TABS.includes(tab)) tab = 'income';
-    if (currentTab && mobile.matches) scrollByTab[currentTab] = window.scrollY;
+    const wasInApp = document.body.dataset.view === 'app';
+    if (currentTab && mobile.matches && wasInApp) scrollByTab[currentTab] = window.scrollY;
+    if (!opts.silent) {
+      document.body.dataset.view = 'app';
+      document.dispatchEvent(new CustomEvent('budget:view', { detail: { view: 'app', tab } }));
+    }
 
     currentTab = tab;
     document.body.dataset.tab = tab;
@@ -62,10 +71,11 @@
       b.setAttribute('aria-current', on ? 'page' : 'false');
     });
     save(TAB_KEY, tab);
+    if (opts.silent) return;
     if (location.hash !== '#' + tab) history.replaceState(null, '', '#' + tab);
 
-    // Come back to where you were on that tab.
-    if (mobile.matches && !opts.keepScroll) window.scrollTo(0, scrollByTab[tab] || 0);
+    // Come back to where you were on that tab (coming from Home starts at the top).
+    if (!opts.keepScroll) window.scrollTo(0, (mobile.matches && wasInApp && scrollByTab[tab]) || 0);
     // Charts drawn while hidden have zero size; nudge them to re-measure.
     window.dispatchEvent(new Event('resize'));
   }
@@ -74,7 +84,7 @@
 
   window.addEventListener('hashchange', () => {
     const t = location.hash.slice(1);
-    if (TABS.includes(t) && t !== currentTab) showTab(t);
+    if (TABS.includes(t) && (t !== currentTab || document.body.dataset.view !== 'app')) showTab(t);
   });
 
   window.showBudgetTab = showTab;
@@ -141,6 +151,7 @@
   }
 
   chips.forEach((c) => c.addEventListener('click', () => showGroup(c.dataset.group)));
+  window.showBudgetGroup = showGroup;
 
   /** Bring the step bar to the top, just under the pinned money strip. */
   function scrollToSteps() {
@@ -296,8 +307,11 @@
   // Init
   // ---------------------------------------------------------------------------
 
+  // A calculator link (#income…) opens the calculator; anything else is a site
+  // view handled by home.js, so just prepare the last-used tab behind it.
   const fromHash = location.hash.slice(1);
-  showTab(TABS.includes(fromHash) ? fromHash : load(TAB_KEY, 'income'), { keepScroll: true });
+  if (TABS.includes(fromHash)) showTab(fromHash, { keepScroll: true });
+  else showTab(load(TAB_KEY, 'income'), { keepScroll: true, silent: true });
   showGroup(load(GROUP_KEY, 'fixed'));
   syncFigures();
 })();

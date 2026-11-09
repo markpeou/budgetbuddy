@@ -12,6 +12,12 @@ Parked ideas, roughly in priority order. Move an item into work by opening an is
 - **Measure real scan cost** after the first 20–30 scans (estimate: ~$0.0003–0.0005 per receipt on Haiku 5.5, so ~2,000 receipts per $1).
 - **Cloudflare Turnstile** on the worker if abuse shows up (worst case today ≈ $7/day from one scripted IP at 10 scans/min).
 
+## Calculators with placeholder pages
+
+- **Emergency fund calculator** (`#soon/emergency`): target buffer from essential monthly costs, and time to build it. Linked from journeys and the question list.
+- **Financial runway calculator** (`#soon/runway`): months your savings last if income stops or drops. Powers "six months off", "lost my job", "manage without an income" and "save before leaving my job".
+- **Savings goal timeline**: how long a specific target takes at the current monthly contribution (journey currently routes to the goals split only).
+
 ## Summary (after OCR is reliable)
 
 - Safe to spend today.

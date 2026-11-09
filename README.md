@@ -6,6 +6,8 @@ countries, including international moves and ongoing bills back home.
 
 ## Current capabilities
 
+- Homepage with two ways in: guided financial journeys (question-led) or straight to the calculators.
+
 - Normalize income and expenses across common payment frequencies.
 - Enter expenses in different currencies and report a combined total.
 - Create custom budget splits and compare them with actual spending.
@@ -36,6 +38,7 @@ npm test
 ## Project map
 
 - `index.html`, `styles.css`, `script.js`: current static application.
+- `home.js`, `home.css`: Home, Financial journeys, Calculators, About and Coming soon views; routes into the calculator via `#go/<id>`.
 - `budget-core.js`: DOM-independent budget and currency logic.
 - `tests/`: automated tests.
 - `docs/`: product, design, architecture, API, and data documentation.
