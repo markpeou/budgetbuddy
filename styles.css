@@ -990,10 +990,23 @@ td .money-input-wrap {
     flex-direction: column;
   }
 
+  /* Fields are a fixed 40px so the trash button can match the Item input exactly. */
+  .table-expense tbody .cell-input {
+    height: 40px;
+  }
+
+  /* Bottom-align with the Item input (the label sits above it). */
   .table-expense tbody td:nth-child(7) {
     grid-area: remove;
-    align-self: start;
+    align-self: end;
     justify-self: end;
+  }
+
+  .table-expense tbody td:nth-child(7) .btn-icon {
+    display: flex;
+    width: 40px;
+    height: 40px;
+    min-width: 40px;
   }
 
   .table-expense tbody td:nth-child(7)::before {
