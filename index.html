@@ -11,7 +11,7 @@
       href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700&display=swap"
       rel="stylesheet"
     />
-    <link rel="stylesheet" href="./styles.css?v=20261109f" />
+    <link rel="stylesheet" href="./styles.css?v=20261109g" />
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
   </head>
   <body>
@@ -112,12 +112,13 @@
     <div class="app">
       <div class="money-strip" id="moneyStrip" role="button" tabindex="0" aria-label="Open summary">
         <div class="money-strip-main">
-          <span class="money-strip-label">Left this month</span>
+          <span class="money-strip-label" id="stripLabel">Left over this month</span>
           <strong id="stripRemaining">—</strong>
         </div>
         <div class="money-strip-sub">
           <span>In <strong id="stripIncome">—</strong></span>
           <span>Out <strong id="stripExpenses">—</strong></span>
+          <span>Goals <strong id="stripGoals">—</strong></span>
         </div>
       </div>
 
@@ -284,17 +285,24 @@
           Totals convert into your reporting currency.
         </p>
 
-        <div class="group-switcher" role="tablist" aria-label="Expense type">
-          <button type="button" class="group-chip" role="tab" data-group="fixed">
-            <span>Fixed</span><strong data-total-from="totalFixedMonthly">—</strong>
-          </button>
-          <button type="button" class="group-chip" role="tab" data-group="variable">
-            <span>Variable</span><strong data-total-from="totalVariableMonthly">—</strong>
-          </button>
-          <button type="button" class="group-chip" role="tab" data-group="subs">
-            <span>Subscriptions</span><strong data-total-from="totalSubsMonthly">—</strong>
-          </button>
-        </div>
+        <ol class="group-switcher" role="tablist" aria-label="Expense steps">
+          <li><button type="button" class="group-chip" role="tab" data-group="fixed">
+            <span class="step-label"><span class="step-num">1</span>Fixed</span>
+            <strong data-total-from="totalFixedMonthly">—</strong>
+          </button></li>
+          <li><button type="button" class="group-chip" role="tab" data-group="variable">
+            <span class="step-label"><span class="step-num">2</span>Variable</span>
+            <strong data-total-from="totalVariableMonthly">—</strong>
+          </button></li>
+          <li><button type="button" class="group-chip" role="tab" data-group="subs">
+            <span class="step-label"><span class="step-num">3</span>Subs</span>
+            <strong data-total-from="totalSubsMonthly">—</strong>
+          </button></li>
+          <li><button type="button" class="group-chip" role="tab" data-group="goals">
+            <span class="step-label"><span class="step-num">4</span>Goals</span>
+            <strong data-total-from="summaryPlannedGoals">—</strong>
+          </button></li>
+        </ol>
 
         <div class="expense-group" data-group="fixed" data-add="addFixedExpense">
           <h3 class="subsection-heading">Fixed expenses</h3>
@@ -394,16 +402,19 @@
         </div>
       </section>
 
-      <section class="card card-split" data-panel="summary">
+      <section class="card card-split" data-panel="expenses" data-group="goals">
         <h2 class="section-heading">
           <span class="icon-chip icon-chip--teal" aria-hidden="true">
             <svg class="icon" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><use href="#icon-pie-chart"/></svg>
           </span>
-          Budget split
+          Savings &amp; goals
+          <span class="badge badge-neutral suggested-badge" id="splitSuggestedBadge" hidden>Suggested</span>
         </h2>
         <p class="hint">
-          Decide how you want to divide your income — expenses, long-term savings,
-          investments, travel, debt payoff, and more. Aim for 100%.
+          How do you want to divide your income? Everything other than <strong>Expenses</strong>
+          is money you put aside — savings, emergency fund, investments, travel, debt payoff.
+          <span id="splitSuggestedHint" hidden>These are suggested starting points — change them or delete what you don’t need.</span>
+          Aim for 100%.
         </p>
         <table class="table table-budget-split">
           <thead>
@@ -447,6 +458,23 @@
             </span>
             Summary
           </h2>
+
+          <div class="overview" id="overview">
+            <div class="period-toggle segmented" role="radiogroup" aria-label="Show amounts per">
+              <label class="segmented-option"><input type="radio" name="overviewPeriod" value="day" /><span>Day</span></label>
+              <label class="segmented-option"><input type="radio" name="overviewPeriod" value="week" /><span>Week</span></label>
+              <label class="segmented-option"><input type="radio" name="overviewPeriod" value="month" checked /><span>Month</span></label>
+              <label class="segmented-option"><input type="radio" name="overviewPeriod" value="year" /><span>Year</span></label>
+            </div>
+            <div class="overview-headline" id="overviewHeadline" data-state="">
+              <p class="overview-headline-main" id="overviewHeadlineMain">Add your income to see your summary.</p>
+              <p class="overview-headline-sub" id="overviewHeadlineSub"></p>
+            </div>
+            <ul class="overview-rows" id="overviewRows"></ul>
+          </div>
+
+          <details class="summary-details" id="summaryDetails">
+            <summary>Show all numbers</summary>
           <table class="table table-compact table-summary">
             <thead>
               <tr>
@@ -497,7 +525,7 @@
                 <td class="align-right summary-equiv dual-col" data-dual-col="equiv"><strong id="summaryRemainingAlt">—</strong></td>
               </tr>
               <tr>
-                <td>Planned goals (savings &amp; more)</td>
+                <td>Savings &amp; goals</td>
                 <td class="align-right">
                   <strong id="summaryPlannedGoals">—</strong>
                 </td>
@@ -562,7 +590,7 @@
                 <td class="align-right" data-label="Annual"><strong id="bdAllAnnual">—</strong></td>
               </tr>
               <tr>
-                <td>Goals</td>
+                <td>Savings &amp; goals</td>
                 <td class="align-right" data-label="Daily"><strong id="bdGoalsDaily">—</strong></td>
                 <td class="align-right" data-label="Weekly"><strong id="bdGoalsWeekly">—</strong></td>
                 <td class="align-right" data-label="Monthly"><strong id="bdGoalsMonthly">—</strong></td>
@@ -578,6 +606,7 @@
             </tbody>
           </table>
           <p class="hint breakdown-net-hint" id="bdNetAltHint" hidden></p>
+          </details>
         </div>
 
         <div class="chart-panel">
@@ -756,10 +785,11 @@
     </nav>
 
     <script src="./icons.js"></script>
-    <script src="./budget-core.js?v=20261109f"></script>
-    <script src="./script.js?v=20261109f"></script>
-    <script src="./receipt-core.js?v=20261109f"></script>
-    <script src="./receipts.js?v=20261109f"></script>
-    <script src="./nav.js?v=20261109f"></script>
+    <script src="./budget-core.js?v=20261109g"></script>
+    <script src="./script.js?v=20261109g"></script>
+    <script src="./receipt-core.js?v=20261109g"></script>
+    <script src="./receipts.js?v=20261109g"></script>
+    <script src="./nav.js?v=20261109g"></script>
+    <script src="./overview.js?v=20261109g"></script>
   </body>
 </html>

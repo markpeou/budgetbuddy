@@ -1144,7 +1144,7 @@ function updateSummary({
     plannedSavingsVnd > remainingVnd + Math.max(1, remainingVnd * 0.001)
   ) {
     summaryStatusTextEl.textContent =
-      'Goals plan is higher than what is left after expenses';
+      'Savings & goals are more than what is left after expenses';
     summaryStatusTextEl.classList.add('badge-bad');
   } else if (
     Number.isFinite(plannedSavingsVnd) &&
@@ -1258,7 +1258,7 @@ function updateChart({
     'Fixed expenses',
     'Variable expenses',
     'Subscriptions',
-    'Goals',
+    'Savings & goals',
     'Unallocated',
   ];
   const data = [
@@ -1404,6 +1404,23 @@ function recomputeAll() {
 
   updateCurrencyHeaders();
   updateRateHints();
+
+  // Monthly figures in income currency for the overview (Summary headline + rows).
+  const toIncome = (amountReporting) =>
+    Number.isFinite(amountReporting) ? convert(amountReporting, reportingCode, incomeCode) : NaN;
+  document.dispatchEvent(
+    new CustomEvent('budget:recompute', {
+      detail: {
+        incomeCode,
+        expensesOk,
+        income: incomePerMonth,
+        fixed: toIncome(fixedAgg.totalReporting),
+        variable: toIncome(variableAgg.totalReporting),
+        subs: toIncome(subsAgg.totalReporting),
+        goals: plannedSavingsBucketsNative,
+      },
+    })
+  );
 
   // Let the receipts module refresh its analysis (rates / reporting currency / plan changed).
   if (typeof window.onBudgetRecompute === 'function') {

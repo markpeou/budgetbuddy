@@ -17,7 +17,14 @@
   const $ = (id) => document.getElementById(id);
   const panels = [...document.querySelectorAll('[data-panel]')];
   const tabBtns = [...document.querySelectorAll('.tab-btn[data-tab]')];
-  const groups = [...document.querySelectorAll('.expense-group[data-group]')];
+  const groups = [...document.querySelectorAll('.expense-group[data-group], .card-split[data-group]')];
+  const STEPS = ['fixed', 'variable', 'subs', 'goals'];
+  const NEXT_LABEL = {
+    fixed: 'Next: Variable expenses',
+    variable: 'Next: Subscriptions',
+    subs: 'Next: Savings & goals',
+    goals: 'See your summary',
+  };
   const chips = [...document.querySelectorAll('.group-chip[data-group]')];
   const scrollByTab = {};
   let currentTab = null;
@@ -97,6 +104,57 @@
 
   chips.forEach((c) => c.addEventListener('click', () => showGroup(c.dataset.group)));
 
+  /** Bring the step bar to the top, just under the pinned money strip. */
+  function scrollToSteps() {
+    const bar = document.querySelector('.group-switcher');
+    const strip = $('moneyStrip');
+    if (!bar) return;
+    const offset = (strip ? strip.offsetHeight : 0) + 8;
+    window.scrollTo({ top: bar.getBoundingClientRect().top + window.scrollY - offset, behavior: 'smooth' });
+  }
+
+  // ---------------------------------------------------------------------------
+  // "Next" buttons: a clear path Income → Fixed → Variable → Subs → Goals → Summary
+  // ---------------------------------------------------------------------------
+
+  function nextButton(label, onClick) {
+    const btn = document.createElement('button');
+    btn.type = 'button';
+    btn.className = 'next-step';
+    btn.innerHTML = '<span></span><svg class="icon icon--sm" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12h14"/><path d="m12 5 7 7-7 7"/></svg>';
+    btn.firstChild.textContent = label;
+    btn.addEventListener('click', onClick);
+    return btn;
+  }
+
+  groups.forEach((group) => {
+    const step = group.dataset.group;
+    const i = STEPS.indexOf(step);
+    if (i < 0) return;
+    const next = STEPS[i + 1];
+    group.appendChild(
+      nextButton(NEXT_LABEL[step], () => {
+        if (next) {
+          showGroup(next);
+          scrollToSteps();
+        } else {
+          showTab('summary');
+        }
+      })
+    );
+  });
+
+  const incomeCard = document.querySelector('.card-income');
+  if (incomeCard) {
+    incomeCard.appendChild(
+      nextButton('Next: Expenses', () => {
+        showGroup('fixed');
+        showTab('expenses', { keepScroll: true });
+        window.scrollTo(0, 0);
+      })
+    );
+  }
+
   // ---------------------------------------------------------------------------
   // "+ Add" in each list header, and focus the new row wherever Add is pressed
   // ---------------------------------------------------------------------------
@@ -137,24 +195,27 @@
   // Live figures: strip + chip totals mirror what the main script renders
   // ---------------------------------------------------------------------------
 
-  const mirrors = [
-    ['summaryRemaining', 'stripRemaining'],
-    ['summaryIncome', 'stripIncome'],
-    ['summaryAllExpenses', 'stripExpenses'],
-  ];
+  // The strip itself is filled by overview.js (same figure as the Summary headline).
+  const mirrors = [];
   const strip = $('moneyStrip');
 
+  /** "₫24,150,000" → "₫24.2M" so four step totals fit across a phone. */
+  function compactText(text) {
+    const m = String(text).trim().match(/^(-?)(\D*?)([\d.,]+)$/);
+    if (!m) return text.trim() || '—';
+    const n = Number(m[3].replace(/,/g, ''));
+    if (!Number.isFinite(n)) return text.trim();
+    return m[1] + m[2] + n.toLocaleString('en-US', { notation: 'compact', maximumFractionDigits: 1 });
+  }
+
   function syncFigures() {
-    for (const [from, to] of mirrors) {
-      const a = $(from);
-      const b = $(to);
-      if (a && b) b.textContent = a.textContent.trim() || '—';
-    }
-    const left = ($('summaryRemaining') || {}).textContent || '';
-    if (strip) strip.dataset.state = /^\s*-/.test(left) ? 'over' : /[1-9]/.test(left) ? 'ok' : '';
     document.querySelectorAll('[data-total-from]').forEach((el) => {
       const src = $(el.dataset.totalFrom);
-      el.textContent = src ? src.textContent.trim() : '—';
+      el.textContent = src ? compactText(src.textContent) : '—';
+      // A step is "done" once it has a non-zero total.
+      const chip = el.closest('.group-chip');
+      // Goals is handled in overview.js: suggested defaults don't count as done.
+      if (chip && chip.dataset.group !== 'goals') chip.classList.toggle('is-done', /[1-9]/.test(el.textContent));
     });
   }
 

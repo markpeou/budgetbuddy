@@ -2130,8 +2130,9 @@ td .money-input-wrap {
     display: flex;
     flex-direction: column;
     align-items: flex-end;
-    gap: 2px;
-    font-size: 12px;
+    gap: 0;
+    font-size: 11px;
+    line-height: 1.35;
     color: var(--muted);
     min-width: 0;
   }
@@ -2321,4 +2322,292 @@ td .money-input-wrap {
   textarea {
     font-size: 16px !important;
   }
+}
+
+/* ==========================================================================
+   Guided expense steps, Next buttons, Savings & goals badge
+   ========================================================================== */
+
+.next-step {
+  display: none;
+}
+
+.suggested-badge {
+  margin-left: 8px;
+  font-size: 11px;
+  vertical-align: middle;
+}
+
+@media (max-width: 900px) {
+  .group-switcher {
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+    list-style: none;
+    padding: 0;
+    counter-reset: none;
+  }
+
+  .group-switcher li {
+    display: contents;
+  }
+
+  .group-chip {
+    padding: 8px;
+  }
+
+  .step-label {
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+    font-size: 12px;
+    font-weight: 600;
+    color: var(--muted);
+    white-space: nowrap;
+  }
+
+  .step-num {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 18px;
+    height: 18px;
+    border-radius: 50%;
+    background: var(--color-bg-inset);
+    border: 1px solid var(--border);
+    font-size: 11px;
+    font-weight: 700;
+    color: var(--muted);
+    flex-shrink: 0;
+  }
+
+  .group-chip.is-active .step-num {
+    background: var(--color-brand-primary);
+    border-color: var(--color-brand-primary);
+    color: #fff;
+  }
+
+  .group-chip.is-active .step-label {
+    color: var(--color-brand-primary);
+  }
+
+  /* Finished steps get a tick instead of their number */
+  .group-chip.is-done:not(.is-active) .step-num {
+    background: var(--color-success);
+    border-color: var(--color-success);
+    color: transparent;
+    position: relative;
+  }
+
+  .group-chip.is-done:not(.is-active) .step-num::after {
+    content: '';
+    position: absolute;
+    width: 5px;
+    height: 9px;
+    border: solid #fff;
+    border-width: 0 2px 2px 0;
+    transform: translate(0, -1px) rotate(45deg);
+  }
+
+  .group-chip strong {
+    font-size: 12px;
+  }
+
+  .next-step {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    width: 100%;
+    min-height: 48px;
+    margin-top: 16px;
+    border-radius: var(--radius-btn);
+    border: 1.5px solid var(--color-brand-primary);
+    background: var(--color-brand-primary-soft);
+    color: var(--color-brand-primary);
+    font-family: var(--font-family);
+    font-size: 15px;
+    font-weight: 600;
+    cursor: pointer;
+  }
+
+  .next-step:active {
+    transform: scale(0.99);
+  }
+
+  /* Goals step sits right under the expenses card on phones */
+  .card-split {
+    order: 3;
+  }
+}
+
+/* ==========================================================================
+   Summary overview
+   ========================================================================== */
+
+.overview {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  margin-bottom: 14px;
+}
+
+.period-toggle {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  width: 100%;
+}
+
+.period-toggle .segmented-option span {
+  width: 100%;
+  align-items: center;
+  padding: 8px 0;
+}
+
+.overview-headline {
+  padding: 14px 16px;
+  border-radius: var(--radius-md);
+  background: var(--color-bg-inset);
+  border: 1px solid var(--border);
+}
+
+.overview-headline[data-state='good'] {
+  background: var(--color-success-soft);
+  border-color: rgba(5, 150, 105, 0.25);
+}
+
+.overview-headline[data-state='warn'] {
+  background: #fffbeb;
+  border-color: rgba(217, 119, 6, 0.3);
+}
+
+.overview-headline[data-state='bad'] {
+  background: var(--color-danger-soft);
+  border-color: rgba(220, 38, 38, 0.25);
+}
+
+.overview-headline-main {
+  margin: 0;
+  font-size: 18px;
+  font-weight: 700;
+  letter-spacing: -0.01em;
+  line-height: 1.3;
+}
+
+.overview-headline[data-state='good'] .overview-headline-main {
+  color: #047857;
+}
+
+.overview-headline[data-state='warn'] .overview-headline-main {
+  color: #b45309;
+}
+
+.overview-headline[data-state='bad'] .overview-headline-main {
+  color: var(--color-danger);
+}
+
+.overview-headline-sub {
+  margin: 4px 0 0;
+  font-size: 13px;
+  color: var(--muted);
+  line-height: 1.45;
+}
+
+.overview-rows {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+.overview-row {
+  padding: 10px 0;
+  border-bottom: 1px solid var(--border);
+}
+
+.overview-row:last-child {
+  border-bottom: none;
+}
+
+.overview-row-top {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  gap: 12px;
+}
+
+.overview-label {
+  font-size: 14px;
+  font-weight: 500;
+  display: inline-flex;
+  align-items: baseline;
+  gap: 6px;
+}
+
+.overview-pct {
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--muted);
+  font-variant-numeric: tabular-nums;
+}
+
+.overview-value {
+  font-size: 15px;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+.overview-bar {
+  height: 6px;
+  margin-top: 6px;
+  border-radius: 999px;
+  background: var(--color-bg-inset);
+  overflow: hidden;
+}
+
+.overview-bar span {
+  display: block;
+  height: 100%;
+  border-radius: inherit;
+}
+
+.overview-row--fixed .overview-bar span { background: #7b14ef; }
+.overview-row--variable .overview-bar span { background: #00b4a0; }
+.overview-row--subs .overview-bar span { background: #ffc845; }
+.overview-row--goals .overview-bar span { background: #c026d3; }
+.overview-row--left .overview-bar span { background: var(--color-success); }
+.overview-row--short .overview-bar span { background: var(--color-danger); }
+
+.overview-row--income .overview-value {
+  font-size: 16px;
+}
+
+.overview-row--left .overview-value {
+  color: var(--color-success);
+}
+
+.overview-row--short .overview-value,
+.overview-row--short .overview-label {
+  color: var(--color-danger);
+}
+
+.summary-details > summary {
+  cursor: pointer;
+  padding: 10px 0;
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--color-brand-primary);
+  list-style: none;
+}
+
+.summary-details > summary::-webkit-details-marker {
+  display: none;
+}
+
+.summary-details > summary::after {
+  content: ' ▾';
+}
+
+.summary-details[open] > summary::after {
+  content: ' ▴';
 }
