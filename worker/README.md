@@ -1,6 +1,6 @@
 # Receipt reader worker
 
-A Cloudflare Worker that reads receipt photos with Claude for Budget Buddy.
+A Cloudflare Worker that reads receipt photos, screenshots and PDFs with Claude for Budget Buddy.
 Your Anthropic API key lives here as a secret, so it never reaches anyone's
 browser. Images are passed straight to Claude and never stored or logged.
 

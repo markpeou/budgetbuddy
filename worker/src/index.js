@@ -5,13 +5,13 @@
  * receipt image, asks Claude for the data points, returns them. Nothing is
  * stored or logged: the image only exists for the length of this request.
  *
- * POST /  { image: "<base64 jpeg>" }
+ * POST /  { image: "<base64 jpeg>" }  or  { pdf: "<base64 pdf>" }
  *   → 200 { merchant, total, currency, date, category }
  *   → 422 { error: "not_a_receipt" }
  */
 
 const MODEL = 'claude-haiku-5-5';
-const MAX_IMAGE_BYTES = 3 * 1024 * 1024; // base64 length cap (~2.2 MB JPEG)
+const MAX_IMAGE_BYTES = 3 * 1024 * 1024; // base64 length cap (~2.2 MB file)
 
 const CATEGORIES = [
   'groceries', 'dining', 'transport', 'shopping', 'health',
@@ -80,15 +80,21 @@ export default {
       if (!success) return json({ error: 'rate_limited' }, 429, cors);
     }
 
-    let image;
+    let body;
     try {
-      ({ image } = await request.json());
+      body = await request.json();
     } catch {
       return json({ error: 'bad_request' }, 400, cors);
     }
-    if (typeof image !== 'string' || !image || image.length > MAX_IMAGE_BYTES || !/^[A-Za-z0-9+/=]+$/.test(image)) {
+    const isPdf = typeof body.pdf === 'string';
+    const file = isPdf ? body.pdf : body.image;
+    if (typeof file !== 'string' || !file || file.length > MAX_IMAGE_BYTES || !/^[A-Za-z0-9+/=]+$/.test(file)) {
       return json({ error: 'bad_image' }, 400, cors);
     }
+    // Digital receipts (e-invoices) are often PDFs; Claude reads them directly.
+    const receiptBlock = isPdf
+      ? { type: 'document', source: { type: 'base64', media_type: 'application/pdf', data: file } }
+      : { type: 'image', source: { type: 'base64', media_type: 'image/jpeg', data: file } };
 
     const today = new Date().toISOString().slice(0, 10);
     const res = await fetch('https://api.anthropic.com/v1/messages', {
@@ -107,7 +113,7 @@ export default {
           {
             role: 'user',
             content: [
-              { type: 'image', source: { type: 'base64', media_type: 'image/jpeg', data: image } },
+              receiptBlock,
               { type: 'text', text: `Read this receipt and record it. Today is ${today}.` },
             ],
           },

@@ -2611,3 +2611,126 @@ td .money-input-wrap {
 .summary-details[open] > summary::after {
   content: ' ▴';
 }
+
+/* ==========================================================================
+   Receipt capture: photo / upload / drop, and the Scan choice sheet
+   ========================================================================== */
+
+.receipt-drop-hint {
+  margin: 0;
+}
+
+.receipt-capture.is-dropping {
+  border: 2px dashed var(--color-brand-primary);
+  background: var(--color-brand-primary-soft);
+}
+
+@media (max-width: 900px) {
+  /* "Drop a file here" means nothing on a phone. */
+  .receipt-drop-hint {
+    display: none;
+  }
+
+  .receipt-actions .btn {
+    flex: 1 1 0;
+    min-height: 44px;
+  }
+
+  .receipt-actions #receiptManualBtn {
+    flex-basis: 100%;
+  }
+}
+
+.scan-sheet[hidden] {
+  display: none;
+}
+
+.scan-sheet {
+  position: fixed;
+  inset: 0;
+  z-index: 50;
+  display: flex;
+  align-items: flex-end;
+}
+
+.scan-sheet-backdrop {
+  position: absolute;
+  inset: 0;
+  background: rgba(26, 26, 46, 0.4);
+  animation: sheet-fade 0.15s ease;
+}
+
+.scan-sheet-panel {
+  position: relative;
+  width: 100%;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 16px 16px calc(16px + env(safe-area-inset-bottom));
+  border-radius: 16px 16px 0 0;
+  background: var(--color-bg-surface);
+  animation: sheet-up 0.2s ease;
+}
+
+.scan-sheet-option {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  min-height: 60px;
+  padding: 12px 16px;
+  border-radius: var(--radius-md);
+  border: 1px solid var(--border);
+  background: var(--color-bg-inset);
+  color: var(--color-brand-primary);
+  font-family: var(--font-family);
+  text-align: left;
+  cursor: pointer;
+}
+
+.scan-sheet-option span {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.scan-sheet-option strong {
+  font-size: 16px;
+  color: var(--text);
+}
+
+.scan-sheet-option small {
+  font-size: 13px;
+  color: var(--muted);
+}
+
+.scan-sheet-cancel {
+  min-height: 48px;
+  border: none;
+  background: none;
+  font-family: var(--font-family);
+  font-size: 16px;
+  font-weight: 600;
+  color: var(--muted);
+  cursor: pointer;
+}
+
+body.sheet-open .tab-bar {
+  visibility: hidden;
+}
+
+@keyframes sheet-up {
+  from { transform: translateY(100%); }
+  to { transform: translateY(0); }
+}
+
+@keyframes sheet-fade {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+/* On a computer "Take photo" just opens a file picker — same as Upload. */
+@media (hover: hover) and (pointer: fine) {
+  .receipt-camera-btn {
+    display: none;
+  }
+}

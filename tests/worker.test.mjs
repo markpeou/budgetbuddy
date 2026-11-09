@@ -46,6 +46,15 @@ await test('reads a receipt and returns data points only', async () => {
   assert.deepStrictEqual(sent.body.tool_choice, { type: 'tool', name: 'record_receipt' });
 });
 
+await test('PDF receipts are sent as a document', async () => {
+  upstream = toolReply({ is_receipt: true, merchant: 'Grab', total: 85000, currency: 'VND', date: '2026-11-08', category: 'transport' });
+  const res = await post({ pdf: 'JVBERi0x' });
+  assert.strictEqual(res.status, 200);
+  const block = sent.body.messages[0].content[0];
+  assert.strictEqual(block.type, 'document');
+  assert.strictEqual(block.source.media_type, 'application/pdf');
+});
+
 await test('other websites are refused', async () => {
   const res = await post({ image: 'QUJD' }, 'https://evil.example');
   assert.strictEqual(res.status, 403);

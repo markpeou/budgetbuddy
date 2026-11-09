@@ -77,13 +77,51 @@
     if (TABS.includes(t) && t !== currentTab) showTab(t);
   });
 
-  // Scan from anywhere: jump to Spending, open the camera in the same tap.
+  window.showBudgetTab = showTab;
+
+  // Scan from anywhere: choose camera or upload, then jump to Spending.
+  // The file picker opens from the choice tap itself (iOS needs a direct tap).
   const scanBtn = $('tabScan');
+  const cameraInput = $('receiptCameraInput');
   const fileInput = $('receiptFileInput');
   if (scanBtn && fileInput) {
+    const sheet = document.createElement('div');
+    sheet.className = 'scan-sheet';
+    sheet.hidden = true;
+    sheet.innerHTML = `
+      <div class="scan-sheet-backdrop" data-close></div>
+      <div class="scan-sheet-panel" role="dialog" aria-modal="true" aria-label="Add a receipt">
+        <button type="button" class="scan-sheet-option" data-pick="camera">
+          <svg class="icon" width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><use href="#icon-camera"/></svg>
+          <span><strong>Take photo</strong><small>Paper receipt</small></span>
+        </button>
+        <button type="button" class="scan-sheet-option" data-pick="upload">
+          <svg class="icon" width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><use href="#icon-image"/></svg>
+          <span><strong>Upload</strong><small>Screenshot, photo or PDF</small></span>
+        </button>
+        <button type="button" class="scan-sheet-cancel" data-close>Cancel</button>
+      </div>`;
+    document.body.appendChild(sheet);
+
+    const close = () => {
+      sheet.hidden = true;
+      document.body.classList.remove('sheet-open');
+    };
     scanBtn.addEventListener('click', () => {
+      sheet.hidden = false;
+      document.body.classList.add('sheet-open');
+      sheet.querySelector('[data-pick="camera"]').focus({ preventScroll: true });
+    });
+    sheet.addEventListener('click', (e) => {
+      if (e.target.closest('[data-close]')) return close();
+      const pick = e.target.closest('[data-pick]');
+      if (!pick) return;
+      close();
       showTab('spending');
-      fileInput.click();
+      (pick.dataset.pick === 'camera' && cameraInput ? cameraInput : fileInput).click();
+    });
+    document.addEventListener('keydown', (e) => {
+      if (e.key === 'Escape' && !sheet.hidden) close();
     });
   }
 

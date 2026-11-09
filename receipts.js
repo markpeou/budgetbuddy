@@ -34,6 +34,8 @@
   const $ = (id) => document.getElementById(id);
   const els = {
     fileInput: $('receiptFileInput'),
+    cameraInput: $('receiptCameraInput'),
+    capture: document.querySelector('.receipt-capture'),
     manualBtn: $('receiptManualBtn'),
     status: $('receiptStatus'),
     keyRow: $('receiptKeyRow'),
@@ -264,20 +266,27 @@
       throw new Error('Add your Anthropic API key first, or switch to On-device.');
     }
 
-    const canvas = await fileToCanvas(file, 1568, false);
-    let base64;
-    try {
-      base64 = canvas.toDataURL('image/jpeg', 0.85).split(',')[1];
-    } finally {
-      wipeCanvas(canvas);
+    let payload;
+    if (isPdf(file)) {
+      if (file.size > MAX_PDF_BYTES) {
+        throw new Error('That PDF is too large. Take a screenshot of the receipt and upload that instead.');
+      }
+      payload = { kind: 'pdf', data: await fileToBase64(file) };
+    } else {
+      const canvas = await fileToCanvas(file, 1568, false);
+      try {
+        payload = { kind: 'image', data: canvas.toDataURL('image/jpeg', 0.85).split(',')[1] };
+      } finally {
+        wipeCanvas(canvas);
+      }
     }
 
     setStatus('Reading receipt with Claude…', 'busy');
     let out;
     try {
-      out = RECEIPT_PROXY_URL ? await callProxy(base64) : await callClaudeDirect(base64, key);
+      out = RECEIPT_PROXY_URL ? await callProxy(payload) : await callClaudeDirect(payload, key);
     } finally {
-      base64 = null;
+      payload = null;
     }
 
     const merchant = String(out.merchant || '').slice(0, 60);
@@ -295,13 +304,34 @@
     };
   }
 
-  async function callProxy(base64) {
+  const MAX_PDF_BYTES = 2 * 1024 * 1024;
+
+  function isPdf(file) {
+    return file.type === 'application/pdf' || /\.pdf$/i.test(file.name || '');
+  }
+
+  function fileToBase64(file) {
+    return new Promise((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onload = () => resolve(String(reader.result).split(',')[1]);
+      reader.onerror = () => reject(new Error('Could not open that file.'));
+      reader.readAsDataURL(file);
+    });
+  }
+
+  function contentBlock(payload) {
+    return payload.kind === 'pdf'
+      ? { type: 'document', source: { type: 'base64', media_type: 'application/pdf', data: payload.data } }
+      : { type: 'image', source: { type: 'base64', media_type: 'image/jpeg', data: payload.data } };
+  }
+
+  async function callProxy(payload) {
     let res;
     try {
       res = await fetch(RECEIPT_PROXY_URL, {
         method: 'POST',
         headers: { 'content-type': 'application/json' },
-        body: JSON.stringify({ image: base64 }),
+        body: JSON.stringify(payload.kind === 'pdf' ? { pdf: payload.data } : { image: payload.data }),
       });
     } catch (e) {
       throw new Error('Could not reach the receipt reader. Check your connection.');
@@ -316,7 +346,7 @@
     return body;
   }
 
-  async function callClaudeDirect(base64, key) {
+  async function callClaudeDirect(payload, key) {
     const res = await fetch('https://api.anthropic.com/v1/messages', {
       method: 'POST',
       headers: {
@@ -334,7 +364,7 @@
           {
             role: 'user',
             content: [
-              { type: 'image', source: { type: 'base64', media_type: 'image/jpeg', data: base64 } },
+              contentBlock(payload),
               { type: 'text', text: `Read this receipt and record it. Today is ${RC.todayIso()}.` },
             ],
           },
@@ -365,11 +395,24 @@
   // Capture flow
   // ---------------------------------------------------------------------------
 
-  async function onFileChosen() {
-    const file = els.fileInput.files && els.fileInput.files[0];
+  function onInputChange(e) {
+    const input = e.target;
+    const file = input.files && input.files[0];
     // Release the file from the input immediately; we hold it only in this scope.
-    els.fileInput.value = '';
+    input.value = '';
+    processFile(file);
+  }
+
+  async function processFile(file) {
     if (!file || busy) return;
+    if (!isPdf(file) && !/^image\//.test(file.type || '') && !/\.(jpe?g|png|heic|heif|webp|gif)$/i.test(file.name || '')) {
+      setStatus('That file type isn’t supported. Use a photo, screenshot or PDF.', 'error');
+      return;
+    }
+    if (isPdf(file) && getEngine() !== 'claude') {
+      setStatus('PDF receipts need Claude AI. Switch to Claude AI, or upload a screenshot instead.', 'warn');
+      return;
+    }
     busy = true;
     try {
       const result = getEngine() === 'claude' ? await readWithClaude(file) : await readWithOcr(file);
@@ -731,7 +774,43 @@
   fillCurrencySelect();
   initEngine();
 
-  els.fileInput.addEventListener('change', onFileChosen);
+  els.fileInput.addEventListener('change', onInputChange);
+  if (els.cameraInput) els.cameraInput.addEventListener('change', onInputChange);
+
+  // Desktop: drop a file on the receipts section, or paste a screenshot.
+  const section = $('receiptsSection');
+  if (section && els.capture) {
+    ['dragenter', 'dragover'].forEach((t) =>
+      section.addEventListener(t, (e) => {
+        if (![...(e.dataTransfer && e.dataTransfer.types) || []].includes('Files')) return;
+        e.preventDefault();
+        els.capture.classList.add('is-dropping');
+      })
+    );
+    ['dragleave', 'drop'].forEach((t) =>
+      section.addEventListener(t, (e) => {
+        if (t === 'dragleave' && section.contains(e.relatedTarget)) return;
+        els.capture.classList.remove('is-dropping');
+      })
+    );
+    section.addEventListener('drop', (e) => {
+      const file = e.dataTransfer && e.dataTransfer.files && e.dataTransfer.files[0];
+      if (!file) return;
+      e.preventDefault();
+      processFile(file);
+    });
+  }
+  document.addEventListener('paste', (e) => {
+    // Don't hijack pastes into text fields.
+    if (/^(INPUT|TEXTAREA)$/.test((document.activeElement || {}).tagName || '')) return;
+    const items = [...((e.clipboardData && e.clipboardData.items) || [])];
+    const item = items.find((i) => i.kind === 'file' && (/^image\//.test(i.type) || i.type === 'application/pdf'));
+    if (!item) return;
+    e.preventDefault();
+    if (section && section.scrollIntoView && section.offsetParent) section.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    if (typeof window.showBudgetTab === 'function') window.showBudgetTab('spending');
+    processFile(item.getAsFile());
+  });
   els.manualBtn.addEventListener('click', () =>
     openReview({ merchant: '', amount: NaN, currency: getReportingCurrency(), date: RC.todayIso(), category: 'other' })
   );
