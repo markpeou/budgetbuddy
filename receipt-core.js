@@ -273,18 +273,36 @@
   ];
   const EXCLUDE_LINE = /(sub ?total|tam tinh|tax|gst|vat|thue|change|tien thoi|tien thua|tien khach dua|cash tendered|tendered|rounding|discount|giam gia|so luong|qty|quantity|points|diem|saving|you saved|\*{3,}|x{4,}|auth|approval|ref no|terminal)/;
 
-  function extractTotal(text) {
+  /** Footer small print: "access winmart.vn within 60 minutes", hotlines, websites. */
+  const FOOTER_NOISE = /(phut|minute|hotline|truy cap|www|http|\.vn\b|\.com|website|xuat hoa don|ma xac thuc|tra cuu)/;
+
+  /** OCR often turns "1,180,521" into "1 180 521". Rejoin digit groups split by spaces. */
+  function joinSpacedThousands(line) {
+    return line.replace(/(\d)[ ](?=\d{3}(?!\d))/g, '$1,');
+  }
+
+  /** Reject amounts that can't be a receipt total in this currency (e.g. ₫60). */
+  function plausibleTotal(n, currency) {
+    if (!Number.isFinite(n) || n <= 0) return false;
+    if (currency === 'VND') return n >= 1000 && n < 1e9;
+    if (currency === 'KRW' || currency === 'JPY') return n >= 10 && n < 1e8;
+    return n >= 0.1 && n < 1e6;
+  }
+
+  function extractTotal(text, currency) {
     const lines = String(text || '').split(/\r?\n/).map((l) => l.trim()).filter(Boolean);
+    const pick = (line) => moneyTokens(joinSpacedThousands(line)).filter((n) => plausibleTotal(n, currency));
     for (let rank = 0; rank < TOTAL_KEYWORDS.length; rank++) {
       // Walk from the bottom: totals sit near the end of a receipt.
       for (let i = lines.length - 1; i >= 0; i--) {
         const f = fold(lines[i]);
+        if (FOOTER_NOISE.test(f)) continue;
         // "Total incl. GST 45.20" is a total; "GST included in total 4.11" is not.
         const forExclude = f.replace(/\b(inc|incl|including|da bao gom|bao gom)\.? ?(gst|tax|vat|thue)\b/g, '');
         if (!TOTAL_KEYWORDS[rank].test(f) || EXCLUDE_LINE.test(forExclude)) continue;
-        let nums = moneyTokens(lines[i]);
+        let nums = pick(lines[i]);
         // Amount is sometimes on the next line.
-        if (!nums.length && lines[i + 1]) nums = moneyTokens(lines[i + 1]);
+        if (!nums.length && lines[i + 1]) nums = pick(lines[i + 1]);
         if (nums.length) {
           return { amount: nums[nums.length - 1], confidence: rank <= 2 ? 'high' : 'medium' };
         }
@@ -293,8 +311,9 @@
     // Fallback: the largest plausible amount, ignoring long ID-like digit runs.
     let best = NaN;
     for (const line of lines) {
+      if (FOOTER_NOISE.test(fold(line))) continue;
       if (/\d{9,}/.test(line.replace(/[\s.,]/g, '')) && !/[.,]\d{3}\b/.test(line)) continue;
-      for (const n of moneyTokens(line)) {
+      for (const n of pick(line)) {
         if (!Number.isFinite(best) || n > best) best = n;
       }
     }
@@ -354,7 +373,7 @@
   }
 
   /** A line ending in a price: "Phin Sữa Đá x2 78.000", "MILK 2L 3.10". Not times or dates. */
-  const PRICE_AT_END = /(?:\d{1,3}(?:[.,]\d{3})+|\d+[.,]\d{2})\s*(?:đ|₫|vnd|vnđ|d)?\s*$/i;
+  const PRICE_AT_END = /(?:\d{1,3}(?:[.,\s]\d{3})+|\d+[.,]\d{2})\s*(?:đ|₫|vnd|vnđ|d)?\s*$/i;
 
   function splitLines(text) {
     return String(text || '').split(/\r?\n/).map((l) => l.trim()).filter(Boolean);
@@ -390,11 +409,16 @@
     const known = findBrandInReceipt(text);
     if (known) return { name: known.name, knownCategory: known.category };
     const lines = splitLines(text);
-    for (const line of lines.slice(0, 6)) {
+    // Only lines above the first priced item can be the shop name. If nothing
+    // there looks like a real name, leave it blank rather than guess.
+    const firstPriced = lines.findIndex((l) => PRICE_AT_END.test(l));
+    const header = lines.slice(0, Math.min(firstPriced < 0 ? 4 : firstPriced, 4));
+    for (const line of header) {
       const letters = (line.match(/\p{L}/gu) || []).length;
-      if (letters < 3) continue;
+      if (letters < 4) continue;
       if (NOT_MERCHANT.test(fold(line))) continue;
-      if (letters / line.length < 0.5) continue; // mostly digits/symbols → address or noise
+      if (letters / line.replace(/\s/g, '').length < 0.75) continue; // digits/symbols → address or noise
+      if (!/\p{L}{4,}/u.test(line)) continue; // needs at least one real word
       return { name: tidyName(line), knownCategory: null };
     }
     const label = domainLabels(text)[0];
@@ -472,9 +496,9 @@
    * @returns {{merchant:string, amount:number, currency:string, date:string, category:string, confidence:string, currencyDetected:boolean}}
    */
   function parseReceiptText(text, options = {}) {
-    const total = extractTotal(text);
-    const merchant = extractMerchant(text);
     const currency = detectCurrency(text, options.defaultCurrency);
+    const total = extractTotal(text, currency.code);
+    const merchant = extractMerchant(text);
     const date = extractDate(text, options.today) || todayIso(options.today);
     const category = categorise(merchant.name, text, options.learned);
     return {
@@ -589,6 +613,7 @@
     moneyTokens,
     detectCurrency,
     extractTotal,
+    plausibleTotal,
     extractMerchant,
     extractDate,
     categorise,

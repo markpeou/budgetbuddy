@@ -1,0 +1,18 @@
+name = "budgetbuddy-receipts"
+main = "src/index.js"
+compatibility_date = "2026-06-01"
+
+[vars]
+# Sites allowed to call this worker (comma-separated, no trailing slash).
+ALLOWED_ORIGINS = "https://markpeou.github.io,http://127.0.0.1:5180,http://localhost:5180"
+
+# 10 receipts per minute per IP address.
+[[ratelimits]]
+name = "RATE_LIMITER"
+namespace_id = "1001"
+
+  [ratelimits.simple]
+  limit = 10
+  period = 60
+
+# Secret (never in this file): npx wrangler secret put ANTHROPIC_API_KEY

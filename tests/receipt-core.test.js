@@ -181,6 +181,34 @@ test('OCR look-alike glyphs still match brands', () => {
   assert.strictEqual(rc.extractMerchant('WlNRNART\nsomething').name, 'WinMart');
 });
 
+test('footer "trong 60 phút" misread as "TONG 60" is not a total', () => {
+  const text = `PHIEU TINH TIEN
+Gao thom 52,900
+Tien can thanh tean
+Truy cap xuathoadon.winmart.vn TONG 60 phut`;
+  const r = rc.parseReceiptText(text, { defaultCurrency: 'VND', today: TODAY });
+  assert.notStrictEqual(r.amount, 60);
+});
+
+test('total split by spaces ("1 180 521") is rejoined', () => {
+  const r = rc.extractTotal('Gao thom 52,900\nTONG TIEN HANG -9 800 1 180 521', 'VND');
+  assert.strictEqual(r.amount, 1180521);
+});
+
+test('implausible VND totals are rejected', () => {
+  assert.strictEqual(rc.plausibleTotal(521, 'VND'), false);
+  assert.strictEqual(rc.plausibleTotal(93000, 'VND'), true);
+  assert.strictEqual(rc.plausibleTotal(4.5, 'AUD'), true);
+});
+
+test('item lines are never used as the shop name; blank beats a guess', () => {
+  const text = `@@ vv ~~
+NGOC NUON Gao thom 0) SX 52 900
+LISTERINE NSM b ve 185,600
+Tong tien 1,180,521`;
+  assert.strictEqual(rc.extractMerchant(text).name, '');
+});
+
 // Regression: real Tesseract (eng+vie) output from generated, blurred, rotated receipt photos.
 // Note the OCR's own errors (0→9 in vn_pho's date and prices) — the parser must degrade gracefully.
 const fs = require('fs');

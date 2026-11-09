@@ -18,11 +18,18 @@
 
   const STORE_KEY = 'budgetBuddyReceipts_v1';
   const LEARNED_KEY = 'budgetBuddyMerchantCategories_v1';
-  const ENGINE_KEY = 'budgetBuddyReceiptEngine_v1';
+  const ENGINE_KEY = 'budgetBuddyReceiptEngine_v2';
   const API_KEY_KEY = 'budgetBuddyAnthropicKey_v1';
 
   const TESSERACT_SRC = 'https://cdn.jsdelivr.net/npm/tesseract.js@5/dist/tesseract.min.js';
   const CLAUDE_MODEL = 'claude-haiku-5-5';
+
+  /**
+   * URL of your deployed receipt worker (see worker/README.md). When set,
+   * everyone can use Claude without their own key; the key stays on the server.
+   * When empty, Claude mode asks for a personal API key instead.
+   */
+  const RECEIPT_PROXY_URL = '';
 
   const $ = (id) => document.getElementById(id);
   const els = {
@@ -95,7 +102,7 @@
   }
 
   function initEngine() {
-    const saved = loadJson(ENGINE_KEY, 'ocr');
+    const saved = loadJson(ENGINE_KEY, 'claude');
     const radio = document.querySelector(`input[name="receiptEngine"][value="${saved}"]`);
     if (radio) radio.checked = true;
     try {
@@ -120,7 +127,7 @@
   }
 
   function syncEngineUI() {
-    els.keyRow.hidden = getEngine() !== 'claude';
+    els.keyRow.hidden = getEngine() !== 'claude' || Boolean(RECEIPT_PROXY_URL);
   }
 
   // ---------------------------------------------------------------------------
@@ -215,12 +222,47 @@
   }
 
   // ---------------------------------------------------------------------------
-  // Engine 2: Claude vision (bring your own key)
+  // Engine 2: Claude vision — via your worker (no key in the browser), or a
+  // personal key as a fallback for local use.
   // ---------------------------------------------------------------------------
+
+  /** Same schema the worker uses: a tool call guarantees well-formed fields. */
+  const RECEIPT_TOOL = {
+    name: 'record_receipt',
+    description: 'Record the purchase shown on a receipt.',
+    input_schema: {
+      type: 'object',
+      properties: {
+        is_receipt: { type: 'boolean', description: 'False if the image is not a purchase receipt.' },
+        merchant: {
+          type: 'string',
+          description: 'The shop or business that issued the receipt (the store, not a product brand on a line item). Tidy capitalisation.',
+        },
+        total: {
+          type: 'number',
+          description: 'Final amount paid incl. tax, after discounts. Not subtotal, cash given or change. Plain number: 1,180,521 VND → 1180521.',
+        },
+        currency: { type: 'string', description: 'ISO 4217 code inferred from symbols, language and country.' },
+        date: { type: 'string', description: 'YYYY-MM-DD. Receipts are day-first (09/11/2026 = 9 Nov 2026). Empty if not shown.' },
+        category: { type: 'string', enum: RC.CATEGORIES.map((c) => c.id) },
+      },
+      required: ['is_receipt', 'merchant', 'total', 'currency', 'date', 'category'],
+    },
+  };
+
+  const PROXY_ERRORS = {
+    not_a_receipt: "That doesn't look like a receipt.",
+    unreadable: "Couldn't read that receipt. Try a flatter, brighter photo, or add it manually.",
+    rate_limited: 'Too many scans in a minute. Wait a moment and try again.',
+    busy: 'The reader is busy. Try again in a moment.',
+    origin_not_allowed: 'This site isn’t allowed to use the receipt reader. Check ALLOWED_ORIGINS in the worker.',
+  };
 
   async function readWithClaude(file) {
     const key = els.apiKey.value.trim();
-    if (!key) throw new Error('Add your Anthropic API key first, or switch to On-device.');
+    if (!RECEIPT_PROXY_URL && !key) {
+      throw new Error('Add your Anthropic API key first, or switch to On-device.');
+    }
 
     const canvas = await fileToCanvas(file, 1568, false);
     let base64;
@@ -231,43 +273,74 @@
     }
 
     setStatus('Reading receipt with Claude…', 'busy');
-    const categoryIds = RC.CATEGORIES.map((c) => c.id).join(', ');
-    const prompt =
-      'Extract the purchase from this receipt. Reply with JSON only, no prose:\n' +
-      '{"merchant": string (shop or business name, tidy capitalisation),' +
-      ' "total": number (final amount paid incl. tax, after discounts; not subtotal, not change, not cash given),' +
-      ' "currency": string (ISO 4217 code, infer from symbols/language/country),' +
-      ' "date": string (YYYY-MM-DD, receipts are day-first; empty if absent),' +
-      ` "category": one of [${categoryIds}]}\n` +
-      'If the image is not a receipt, reply {"error": "not a receipt"}.';
-
-    let res;
+    let out;
     try {
-      res = await fetch('https://api.anthropic.com/v1/messages', {
-        method: 'POST',
-        headers: {
-          'content-type': 'application/json',
-          'x-api-key': key,
-          'anthropic-version': '2023-06-01',
-          'anthropic-dangerous-direct-browser-access': 'true',
-        },
-        body: JSON.stringify({
-          model: CLAUDE_MODEL,
-          max_tokens: 300,
-          messages: [
-            {
-              role: 'user',
-              content: [
-                { type: 'image', source: { type: 'base64', media_type: 'image/jpeg', data: base64 } },
-                { type: 'text', text: prompt },
-              ],
-            },
-          ],
-        }),
-      });
+      out = RECEIPT_PROXY_URL ? await callProxy(base64) : await callClaudeDirect(base64, key);
     } finally {
       base64 = null;
     }
+
+    const merchant = String(out.merchant || '').slice(0, 60);
+    const validCat = RC.CATEGORIES.some((c) => c.id === out.category);
+    const learnedCat = learned[RC.fold(merchant).trim()];
+    const amount = Number(out.total);
+    const currency = String(out.currency || getReportingCurrency()).toUpperCase();
+    return {
+      merchant,
+      amount: RC.plausibleTotal(amount, currency) ? amount : NaN,
+      currency,
+      date: /^\d{4}-\d{2}-\d{2}$/.test(out.date || '') && out.date <= RC.todayIso() ? out.date : RC.todayIso(),
+      category: learnedCat || (validCat ? out.category : RC.categorise(merchant, '', learned)),
+      confidence: 'high',
+    };
+  }
+
+  async function callProxy(base64) {
+    let res;
+    try {
+      res = await fetch(RECEIPT_PROXY_URL, {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ image: base64 }),
+      });
+    } catch (e) {
+      throw new Error('Could not reach the receipt reader. Check your connection.');
+    }
+    let body = {};
+    try {
+      body = await res.json();
+    } catch (e) {
+      /* ignore */
+    }
+    if (!res.ok) throw new Error(PROXY_ERRORS[body.error] || `Receipt reader error (${res.status}). Try again.`);
+    return body;
+  }
+
+  async function callClaudeDirect(base64, key) {
+    const res = await fetch('https://api.anthropic.com/v1/messages', {
+      method: 'POST',
+      headers: {
+        'content-type': 'application/json',
+        'x-api-key': key,
+        'anthropic-version': '2023-06-01',
+        'anthropic-dangerous-direct-browser-access': 'true',
+      },
+      body: JSON.stringify({
+        model: CLAUDE_MODEL,
+        max_tokens: 400,
+        tools: [RECEIPT_TOOL],
+        tool_choice: { type: 'tool', name: 'record_receipt' },
+        messages: [
+          {
+            role: 'user',
+            content: [
+              { type: 'image', source: { type: 'base64', media_type: 'image/jpeg', data: base64 } },
+              { type: 'text', text: `Read this receipt and record it. Today is ${RC.todayIso()}.` },
+            ],
+          },
+        ],
+      }),
+    });
 
     if (!res.ok) {
       let msg = `Claude request failed (${res.status}).`;
@@ -282,23 +355,10 @@
     }
 
     const data = await res.json();
-    const text = (data.content || []).map((b) => b.text || '').join('');
-    const match = text.match(/\{[\s\S]*\}/);
-    if (!match) throw new Error('Could not understand the reply. Try again or add it manually.');
-    const out = JSON.parse(match[0]);
-    if (out.error) throw new Error("That doesn't look like a receipt.");
-
-    const merchant = String(out.merchant || '').slice(0, 60);
-    const validCat = RC.CATEGORIES.some((c) => c.id === out.category);
-    const learnedCat = learned[RC.fold(merchant).trim()];
-    return {
-      merchant,
-      amount: Number(out.total),
-      currency: String(out.currency || getReportingCurrency()).toUpperCase(),
-      date: /^\d{4}-\d{2}-\d{2}$/.test(out.date || '') ? out.date : RC.todayIso(),
-      category: learnedCat || (validCat ? out.category : RC.categorise(merchant, '', learned)),
-      confidence: 'high',
-    };
+    const call = (data.content || []).find((b) => b.type === 'tool_use');
+    if (!call) throw new Error("Couldn't read that receipt. Try again or add it manually.");
+    if (call.input.is_receipt === false) throw new Error(PROXY_ERRORS.not_a_receipt);
+    return call.input;
   }
 
   // ---------------------------------------------------------------------------
@@ -313,11 +373,18 @@
     busy = true;
     try {
       const result = getEngine() === 'claude' ? await readWithClaude(file) : await readWithOcr(file);
+      // On-device OCR guesses go in as hints, never as values: a blank field is
+      // obvious, a wrong number is easy to save without noticing.
+      const guess = result.confidence === 'low' && Number.isFinite(result.amount) ? result.amount : NaN;
+      if (Number.isFinite(guess)) result.amount = NaN;
       openReview(result);
-      if (!Number.isFinite(result.amount)) {
+      if (Number.isFinite(guess)) {
+        els.amount.placeholder = `Maybe ${formatAmountInput(guess, result.currency)}?`;
+        setStatus("Couldn't read the total clearly — check the receipt and type it in.", 'warn');
+      } else if (!Number.isFinite(result.amount)) {
         setStatus("Couldn't find the total — please type it in.", 'warn');
-      } else if (result.confidence === 'low') {
-        setStatus('Best guess at the total — please double-check it.', 'warn');
+      } else if (!result.merchant) {
+        setStatus('Got the total. Add where it was from.', 'warn');
       } else {
         setStatus('Receipt read. Check the details and save.', 'ok');
       }
@@ -330,6 +397,7 @@
 
   function openReview(data, editingId) {
     els.review.dataset.editing = editingId || '';
+    els.amount.placeholder = '0';
     els.reviewTitle.textContent = editingId ? 'Edit expense' : 'Check the details';
     els.merchant.value = data.merchant || '';
     ensureCurrencyOption(data.currency);
@@ -340,7 +408,8 @@
     els.category.value = data.category || 'other';
     els.review.hidden = false;
     els.review.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
-    (Number.isFinite(data.amount) ? els.merchant : els.amount).focus({ preventScroll: true });
+    const firstEmpty = !Number.isFinite(data.amount) ? els.amount : !data.merchant ? els.merchant : null;
+    if (firstEmpty) firstEmpty.focus({ preventScroll: true });
   }
 
   /** "1180521" → "1,180,521" so the amount is easy to check against the receipt. */

@@ -5,6 +5,6 @@
   "scripts": {
     "dev": "python3 -m http.server 5180",
     "preview": "python3 -m http.server 5180",
-    "test": "node tests/budget-core.test.js && node tests/receipt-core.test.js && node --check budget-core.js && node --check script.js && node --check receipt-core.js && node --check receipts.js"
+    "test": "node tests/budget-core.test.js && node tests/receipt-core.test.js && node tests/worker.test.mjs && node --check budget-core.js && node --check script.js && node --check receipt-core.js && node --check receipts.js"
   }
 }

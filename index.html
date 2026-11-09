@@ -10,7 +10,7 @@
       href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700&display=swap"
       rel="stylesheet"
     />
-    <link rel="stylesheet" href="./styles.css?v=20261109b" />
+    <link rel="stylesheet" href="./styles.css?v=20261109c" />
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
   </head>
   <body>
@@ -576,7 +576,7 @@
         </h2>
         <p class="hint receipt-privacy">
           <svg class="icon icon--sm" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><use href="#icon-shield"/></svg>
-          Snap or upload a receipt. The photo is read once in memory and thrown away —
+          Snap or upload a receipt. The photo is read once and never stored —
           only the date, merchant, amount, currency and category are kept, in this browser.
         </p>
 
@@ -585,12 +585,12 @@
             <span class="field-label">Read receipts with</span>
             <div class="segmented" role="radiogroup" aria-label="Receipt reader">
               <label class="segmented-option">
-                <input type="radio" name="receiptEngine" value="ocr" checked />
-                <span>On-device <small>free · private</small></span>
+                <input type="radio" name="receiptEngine" value="claude" checked />
+                <span>Claude AI <small>accurate</small></span>
               </label>
               <label class="segmented-option">
-                <input type="radio" name="receiptEngine" value="claude" />
-                <span>Claude AI <small>more accurate</small></span>
+                <input type="radio" name="receiptEngine" value="ocr" />
+                <span>On-device <small>offline · rough</small></span>
               </label>
             </div>
           </div>
@@ -601,8 +601,8 @@
                 placeholder="sk-ant-…" spellcheck="false" />
             </div>
             <p class="hint">
-              Saved in this browser only and sent straight to Anthropic with each receipt. The image is
-              sent for reading and not kept by this app. Use a key with a low spend limit.
+              For personal use until the receipt reader is set up. Saved in this browser only and sent
+              straight to Anthropic with each receipt. Use a key with a low spend limit.
             </p>
           </div>
           <div class="receipt-actions">
@@ -722,9 +722,9 @@
     </div>
 
     <script src="./icons.js"></script>
-    <script src="./budget-core.js?v=20261109b"></script>
-    <script src="./script.js?v=20261109b"></script>
-    <script src="./receipt-core.js?v=20261109b"></script>
-    <script src="./receipts.js?v=20261109b"></script>
+    <script src="./budget-core.js?v=20261109c"></script>
+    <script src="./script.js?v=20261109c"></script>
+    <script src="./receipt-core.js?v=20261109c"></script>
+    <script src="./receipts.js?v=20261109c"></script>
   </body>
 </html>
