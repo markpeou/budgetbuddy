@@ -10,7 +10,7 @@
       href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700&display=swap"
       rel="stylesheet"
     />
-    <link rel="stylesheet" href="./styles.css?v=20260721d" />
+    <link rel="stylesheet" href="./styles.css?v=20261109a" />
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
   </head>
   <body>
@@ -82,6 +82,18 @@
         <path d="M8 18h.01" />
         <path d="M12 18h.01" />
         <path d="M16 18h.01" />
+      </symbol>
+      <symbol id="icon-camera" viewBox="0 0 24 24">
+        <path d="M14.5 4h-5L7 7H4a2 2 0 0 0-2 2v9a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2V9a2 2 0 0 0-2-2h-3l-2.5-3z" />
+        <circle cx="12" cy="13" r="3" />
+      </symbol>
+      <symbol id="icon-shield" viewBox="0 0 24 24">
+        <path d="M20 13c0 5-3.5 7.5-7.66 8.95a1 1 0 0 1-.67-.01C7.5 20.5 4 18 4 13V6a1 1 0 0 1 1-1c2 0 4.5-1.2 6.24-2.72a1.17 1.17 0 0 1 1.52 0C14.51 3.81 17 5 19 5a1 1 0 0 1 1 1z" />
+      </symbol>
+      <symbol id="icon-download" viewBox="0 0 24 24">
+        <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
+        <polyline points="7 10 12 15 17 10" />
+        <line x1="12" x2="12" y1="15" y2="3" />
       </symbol>
       <symbol id="icon-plus" viewBox="0 0 24 24">
         <path d="M5 12h14" />
@@ -554,10 +566,165 @@
           <canvas id="spendingChart" aria-label="Spending breakdown chart"></canvas>
         </div>
       </section>
+
+      <section class="card card-receipts" id="receiptsSection">
+        <h2 class="section-heading">
+          <span class="icon-chip icon-chip--purple" aria-hidden="true">
+            <svg class="icon" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><use href="#icon-camera"/></svg>
+          </span>
+          Actual spending — receipts
+        </h2>
+        <p class="hint receipt-privacy">
+          <svg class="icon icon--sm" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><use href="#icon-shield"/></svg>
+          Snap or upload a receipt. The photo is read once in memory and thrown away —
+          only the date, merchant, amount, currency and category are kept, in this browser.
+        </p>
+
+        <div class="receipt-capture mini-card">
+          <div class="receipt-engine-row">
+            <span class="field-label">Read receipts with</span>
+            <div class="segmented" role="radiogroup" aria-label="Receipt reader">
+              <label class="segmented-option">
+                <input type="radio" name="receiptEngine" value="ocr" checked />
+                <span>On-device <small>free · private</small></span>
+              </label>
+              <label class="segmented-option">
+                <input type="radio" name="receiptEngine" value="claude" />
+                <span>Claude AI <small>more accurate</small></span>
+              </label>
+            </div>
+          </div>
+          <div class="receipt-key-row" id="receiptKeyRow" hidden>
+            <label class="field-label" for="receiptApiKey">Anthropic API key</label>
+            <div class="input-wrap">
+              <input id="receiptApiKey" type="password" class="cell-input" autocomplete="off"
+                placeholder="sk-ant-…" spellcheck="false" />
+            </div>
+            <p class="hint">
+              Saved in this browser only and sent straight to Anthropic with each receipt. The image is
+              sent for reading and not kept by this app. Use a key with a low spend limit.
+            </p>
+          </div>
+          <div class="receipt-actions">
+            <label class="btn receipt-upload-btn">
+              <svg class="icon icon--sm" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><use href="#icon-camera"/></svg>
+              Scan receipt
+              <input id="receiptFileInput" type="file" accept="image/*" capture="environment" hidden />
+            </label>
+            <button type="button" id="receiptManualBtn" class="btn btn-soft">
+              <svg class="icon icon--sm" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><use href="#icon-plus"/></svg>
+              Add manually
+            </button>
+          </div>
+          <p class="receipt-status" id="receiptStatus" aria-live="polite"></p>
+        </div>
+
+        <form class="receipt-review mini-card" id="receiptReview" hidden>
+          <p class="receipt-review-title" id="receiptReviewTitle">Check the details</p>
+          <div class="receipt-review-grid">
+            <div class="receipt-field receipt-field--wide">
+              <label class="field-label" for="rvMerchant">Where</label>
+              <input id="rvMerchant" class="cell-input" type="text" maxlength="60" placeholder="Merchant" required />
+            </div>
+            <div class="receipt-field">
+              <label class="field-label" for="rvAmount">Amount</label>
+              <input id="rvAmount" class="cell-input" type="text" inputmode="decimal" placeholder="0" required />
+            </div>
+            <div class="receipt-field">
+              <label class="field-label" for="rvCurrency">Currency</label>
+              <select id="rvCurrency" class="cell-input"></select>
+            </div>
+            <div class="receipt-field">
+              <label class="field-label" for="rvDate">Date</label>
+              <input id="rvDate" class="cell-input" type="date" required />
+            </div>
+            <div class="receipt-field">
+              <label class="field-label" for="rvCategory">Category</label>
+              <select id="rvCategory" class="cell-input"></select>
+            </div>
+          </div>
+          <div class="receipt-review-actions">
+            <button type="submit" class="btn">Save expense</button>
+            <button type="button" id="rvDiscard" class="btn btn-ghost">Discard</button>
+          </div>
+        </form>
+
+        <div class="receipt-analysis" id="receiptAnalysis">
+          <div class="receipt-analysis-head">
+            <h3 class="subsection-heading">Where your money is going</h3>
+            <div class="input-wrap receipt-period-wrap">
+              <select id="receiptPeriod" class="cell-input" aria-label="Period">
+                <option value="this-month" selected>This month</option>
+                <option value="last-month">Last month</option>
+                <option value="last-3-months">Last 3 months</option>
+                <option value="this-year">This year</option>
+                <option value="all">All time</option>
+              </select>
+            </div>
+          </div>
+
+          <p class="hint" id="receiptEmpty">No receipts yet for this period. Scan one to start building the picture.</p>
+
+          <div id="receiptInsights" hidden>
+            <div class="receipt-stats">
+              <div class="cell-output"><span class="cell-output-label">Spent</span><strong id="rsTotal">—</strong></div>
+              <div class="cell-output"><span class="cell-output-label">Transactions</span><strong id="rsCount">—</strong></div>
+              <div class="cell-output"><span class="cell-output-label">Average</span><strong id="rsAvg">—</strong></div>
+            </div>
+            <div class="receipt-plan" id="receiptPlan" hidden>
+              <div class="receipt-plan-label">
+                <span>This month vs planned variable spend</span>
+                <strong id="receiptPlanText">—</strong>
+              </div>
+              <div class="receipt-plan-bar"><span id="receiptPlanFill"></span></div>
+            </div>
+            <p class="hint" id="receiptSkipped" hidden></p>
+
+            <div class="receipt-charts">
+              <div class="receipt-chart-box">
+                <h4 class="receipt-chart-title">By category</h4>
+                <canvas id="receiptCategoryChart" aria-label="Spending by category"></canvas>
+              </div>
+              <div class="receipt-chart-box">
+                <h4 class="receipt-chart-title">Top merchants</h4>
+                <ol class="merchant-list" id="receiptMerchantList"></ol>
+              </div>
+            </div>
+            <div class="receipt-chart-box">
+              <h4 class="receipt-chart-title">By month</h4>
+              <canvas id="receiptMonthChart" height="140" aria-label="Spending by month"></canvas>
+            </div>
+          </div>
+
+          <details class="receipt-ledger" id="receiptLedger">
+            <summary>All saved expenses (<span id="receiptLedgerCount">0</span>)</summary>
+            <div class="table-scroll">
+              <table class="table table-compact table-receipts">
+                <thead>
+                  <tr>
+                    <th>Date</th>
+                    <th>Where</th>
+                    <th>Category</th>
+                    <th class="align-right">Amount</th>
+                    <th></th>
+                  </tr>
+                </thead>
+                <tbody id="receiptLedgerBody"></tbody>
+              </table>
+            </div>
+            <button type="button" id="receiptExportBtn" class="btn btn-soft">
+              <svg class="icon icon--sm" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><use href="#icon-download"/></svg>
+              Export CSV
+            </button>
+          </details>
+        </div>
+      </section>
     </div>
 
     <script src="./icons.js"></script>
-    <script src="./budget-core.js?v=20260721c"></script>
-    <script src="./script.js?v=20260721c"></script>
+    <script src="./budget-core.js?v=20261109a"></script>
+    <script src="./script.js?v=20261109a"></script>
+    <script src="./receipt-core.js?v=20261109a"></script>
+    <script src="./receipts.js?v=20261109a"></script>
   </body>
 </html>

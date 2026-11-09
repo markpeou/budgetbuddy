@@ -1539,3 +1539,459 @@ td .money-input-wrap {
     scroll-behavior: auto !important;
   }
 }
+
+/* ==========================================================================
+   Receipts — actual spending
+   ========================================================================== */
+
+.receipt-privacy {
+  display: flex;
+  align-items: flex-start;
+  gap: 6px;
+}
+
+.receipt-privacy .icon {
+  flex-shrink: 0;
+  margin-top: 1px;
+  color: var(--color-accent-teal);
+}
+
+.receipt-capture {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  margin-bottom: 12px;
+}
+
+.receipt-engine-row {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px 12px;
+}
+
+.segmented {
+  display: inline-flex;
+  padding: 3px;
+  border-radius: var(--radius-btn);
+  background: var(--color-bg-surface);
+  border: 1px solid var(--border);
+  gap: 2px;
+}
+
+.segmented-option {
+  position: relative;
+  cursor: pointer;
+}
+
+.segmented-option input {
+  position: absolute;
+  opacity: 0;
+  pointer-events: none;
+}
+
+.segmented-option span {
+  display: inline-flex;
+  flex-direction: column;
+  padding: 6px 12px;
+  border-radius: 6px;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--muted);
+  line-height: 1.2;
+  transition: background 0.12s ease, color 0.12s ease;
+}
+
+.segmented-option small {
+  font-size: 11px;
+  font-weight: 500;
+  opacity: 0.85;
+}
+
+.segmented-option input:checked + span {
+  background: var(--color-brand-primary-soft);
+  color: var(--color-brand-primary);
+}
+
+.segmented-option input:focus-visible + span {
+  box-shadow: var(--shadow-focus);
+}
+
+.receipt-key-row {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.receipt-key-row .hint {
+  margin: 0;
+}
+
+.receipt-key-row[hidden] {
+  display: none;
+}
+
+.receipt-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.receipt-actions .btn {
+  margin-top: 0;
+}
+
+.receipt-upload-btn {
+  cursor: pointer;
+}
+
+.btn-ghost {
+  background: transparent;
+  color: var(--muted);
+  box-shadow: none;
+  border: 1px solid var(--border);
+}
+
+.btn-ghost:hover {
+  background: var(--color-bg-inset);
+  color: var(--text);
+}
+
+.receipt-status {
+  margin: 0;
+  font-size: 13px;
+  min-height: 1em;
+  color: var(--muted);
+}
+
+.receipt-status:empty {
+  display: none;
+}
+
+.receipt-status[data-kind='busy']::before {
+  content: '';
+  display: inline-block;
+  width: 10px;
+  height: 10px;
+  margin-right: 6px;
+  border-radius: 50%;
+  border: 2px solid var(--color-brand-primary-soft);
+  border-top-color: var(--color-brand-primary);
+  vertical-align: -1px;
+  animation: receipt-spin 0.8s linear infinite;
+}
+
+.receipt-status[data-kind='ok'] {
+  color: var(--color-success);
+}
+
+.receipt-status[data-kind='warn'] {
+  color: #b45309;
+}
+
+.receipt-status[data-kind='error'] {
+  color: var(--color-danger);
+}
+
+@keyframes receipt-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+.receipt-review {
+  margin-bottom: 14px;
+  border-color: rgba(123, 20, 239, 0.35);
+  background: var(--color-bg-surface);
+}
+
+.receipt-review[hidden] {
+  display: none;
+}
+
+.receipt-review-title {
+  margin: 0 0 10px;
+  font-weight: 600;
+  font-size: 14px;
+}
+
+.receipt-review-grid {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.receipt-field {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  min-width: 0;
+}
+
+.receipt-field--wide {
+  grid-column: 1 / -1;
+}
+
+.receipt-review-actions {
+  display: flex;
+  gap: 8px;
+}
+
+.receipt-analysis-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 10px;
+}
+
+.receipt-analysis-head .subsection-heading {
+  margin: 0;
+}
+
+.receipt-period-wrap {
+  flex: 0 0 auto;
+  width: 160px;
+}
+
+.receipt-stats {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 8px;
+  margin-bottom: 12px;
+}
+
+.receipt-plan {
+  margin-bottom: 12px;
+}
+
+.receipt-plan[hidden] {
+  display: none;
+}
+
+.receipt-plan-label {
+  display: flex;
+  justify-content: space-between;
+  gap: 8px;
+  flex-wrap: wrap;
+  font-size: 13px;
+  margin-bottom: 6px;
+  color: var(--muted);
+}
+
+.receipt-plan-label strong {
+  color: var(--text);
+  font-variant-numeric: tabular-nums;
+}
+
+.receipt-plan-bar {
+  height: 8px;
+  border-radius: 999px;
+  background: var(--color-bg-inset);
+  border: 1px solid var(--border);
+  overflow: hidden;
+}
+
+.receipt-plan-bar span {
+  display: block;
+  height: 100%;
+  border-radius: inherit;
+  background: var(--color-accent-teal);
+  transition: width 0.3s ease;
+}
+
+.receipt-plan[data-state='near'] .receipt-plan-bar span {
+  background: var(--color-accent-yellow);
+}
+
+.receipt-plan[data-state='over'] .receipt-plan-bar span {
+  background: var(--color-danger);
+}
+
+.receipt-charts {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  gap: 12px;
+  margin-bottom: 12px;
+}
+
+.receipt-chart-box {
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  padding: 12px;
+  min-width: 0;
+}
+
+.receipt-chart-title {
+  margin: 0 0 10px;
+  font-size: 12px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--muted);
+}
+
+.merchant-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.merchant-row {
+  display: flex;
+  justify-content: space-between;
+  gap: 8px;
+  font-size: 13px;
+}
+
+.merchant-name {
+  font-weight: 600;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  min-width: 0;
+}
+
+.merchant-amount {
+  font-variant-numeric: tabular-nums;
+  flex-shrink: 0;
+}
+
+.merchant-bar {
+  height: 6px;
+  margin: 4px 0 2px;
+  border-radius: 999px;
+  background: var(--color-bg-inset);
+  overflow: hidden;
+}
+
+.merchant-bar span {
+  display: block;
+  height: 100%;
+  border-radius: inherit;
+}
+
+.merchant-meta {
+  font-size: 11px;
+  color: var(--muted);
+}
+
+.receipt-ledger {
+  margin-top: 12px;
+}
+
+.receipt-ledger summary {
+  cursor: pointer;
+  font-size: 14px;
+  font-weight: 600;
+  padding: 6px 0;
+}
+
+.table-scroll {
+  overflow-x: auto;
+  margin-top: 8px;
+}
+
+.table-receipts td {
+  vertical-align: middle;
+}
+
+.table-receipts td:first-child {
+  white-space: nowrap;
+  color: var(--muted);
+}
+
+.table-receipts td:nth-child(4) {
+  white-space: nowrap;
+  font-variant-numeric: tabular-nums;
+  font-weight: 600;
+}
+
+.cell-input--compact {
+  padding: 4px 8px;
+  min-width: 140px;
+}
+
+.link-btn {
+  background: none;
+  border: none;
+  padding: 0;
+  font: inherit;
+  color: var(--text);
+  text-align: left;
+  cursor: pointer;
+  text-decoration: underline;
+  text-decoration-color: var(--border);
+  text-underline-offset: 3px;
+}
+
+.link-btn:hover {
+  text-decoration-color: var(--color-brand-primary);
+}
+
+@media (max-width: 640px) {
+  .receipt-review-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .receipt-charts {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .receipt-stats .cell-output {
+    padding: 8px;
+  }
+
+  .receipt-period-wrap {
+    width: 130px;
+  }
+
+  .segmented {
+    width: 100%;
+  }
+
+  .segmented-option {
+    flex: 1;
+  }
+
+  .segmented-option span {
+    width: 100%;
+    align-items: center;
+  }
+
+  /* Ledger as stacked rows on phones */
+  .table-receipts thead {
+    display: none;
+  }
+
+  .table-receipts tr {
+    display: grid;
+    grid-template-columns: 1fr auto auto;
+    grid-template-areas:
+      'where amount del'
+      'date cat del';
+    gap: 4px 10px;
+    align-items: center;
+    padding: 10px;
+    border-bottom: 1px solid var(--border);
+  }
+
+  .table-receipts td {
+    padding: 0;
+    border: none;
+  }
+
+  .table-receipts td:nth-child(1) { grid-area: date; font-size: 12px; }
+  .table-receipts td:nth-child(2) { grid-area: where; min-width: 0; }
+  .table-receipts td:nth-child(3) { grid-area: cat; }
+  .table-receipts td:nth-child(4) { grid-area: amount; }
+  .table-receipts td:nth-child(5) { grid-area: del; }
+
+  .table-receipts .cell-input--compact {
+    min-width: 0;
+    font-size: 12px;
+  }
+}

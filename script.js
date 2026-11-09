@@ -1404,6 +1404,16 @@ function recomputeAll() {
 
   updateCurrencyHeaders();
   updateRateHints();
+
+  // Let the receipts module refresh its analysis (rates / reporting currency / plan changed).
+  if (typeof window.onBudgetRecompute === 'function') {
+    window.onBudgetRecompute({
+      plannedVariableMonthly:
+        variableAgg.ok && Number.isFinite(variableAgg.totalReporting)
+          ? variableAgg.totalReporting
+          : NaN,
+    });
+  }
 }
 
 function onCurrencyChange() {

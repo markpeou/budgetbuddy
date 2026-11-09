@@ -1,0 +1,529 @@
+/**
+ * Receipt parsing, categorisation and spend analysis (no DOM).
+ * Shared by the browser app and Node tests.
+ *
+ * Only data points are ever produced or stored:
+ *   { id, date, merchant, amount, currency, category, source, createdAt }
+ * The receipt image itself never reaches this module.
+ */
+(function (root, factory) {
+  if (typeof module === 'object' && module.exports) {
+    module.exports = factory();
+  } else {
+    root.ReceiptCore = factory();
+  }
+})(typeof globalThis !== 'undefined' ? globalThis : this, function () {
+  'use strict';
+
+  const CATEGORIES = [
+    { id: 'groceries', label: 'Groceries', color: '#00B4A0' },
+    { id: 'dining', label: 'Dining & cafés', color: '#7B14EF' },
+    { id: 'transport', label: 'Transport', color: '#FFC845' },
+    { id: 'shopping', label: 'Shopping', color: '#C026D3' },
+    { id: 'health', label: 'Health & pharmacy', color: '#0EA5E9' },
+    { id: 'bills', label: 'Bills & utilities', color: '#F97316' },
+    { id: 'entertainment', label: 'Entertainment', color: '#EC4899' },
+    { id: 'travel', label: 'Travel & stays', color: '#14B8A6' },
+    { id: 'personal', label: 'Personal care', color: '#A855F7' },
+    { id: 'other', label: 'Other', color: '#9CA3AF' },
+  ];
+
+  /**
+   * Known merchants → [display name, category]. Checked first because a brand
+   * match is far more reliable than guessing from the top line of OCR text.
+   * Keys are lower-case, accent-stripped substrings.
+   */
+  const KNOWN_MERCHANTS = [
+    // Vietnam — convenience & grocery
+    ['circle k', 'Circle K', 'groceries'],
+    ['circlek', 'Circle K', 'groceries'],
+    ['familymart', 'FamilyMart', 'groceries'],
+    ['family mart', 'FamilyMart', 'groceries'],
+    ['gs25', 'GS25', 'groceries'],
+    ['ministop', 'Ministop', 'groceries'],
+    ['7-eleven', '7-Eleven', 'groceries'],
+    ['7 eleven', '7-Eleven', 'groceries'],
+    ['winmart', 'WinMart', 'groceries'],
+    ['vinmart', 'WinMart', 'groceries'],
+    ['co.opmart', 'Co.opmart', 'groceries'],
+    ['coopmart', 'Co.opmart', 'groceries'],
+    ['co.op food', 'Co.op Food', 'groceries'],
+    ['bach hoa xanh', 'Bách Hóa Xanh', 'groceries'],
+    ['lotte mart', 'Lotte Mart', 'groceries'],
+    ['aeon', 'AEON', 'groceries'],
+    ['emart', 'Emart', 'groceries'],
+    ['mm mega', 'MM Mega Market', 'groceries'],
+    ['big c', 'GO! / Big C', 'groceries'],
+    ['annam', 'Annam Gourmet', 'groceries'],
+    // Vietnam — cafés & food
+    ['highlands', 'Highlands Coffee', 'dining'],
+    ['phuc long', 'Phúc Long', 'dining'],
+    ['the coffee house', 'The Coffee House', 'dining'],
+    ['katinat', 'Katinat', 'dining'],
+    ['cong caphe', 'Cộng Cà Phê', 'dining'],
+    ['starbucks', 'Starbucks', 'dining'],
+    ['trung nguyen', 'Trung Nguyên', 'dining'],
+    ['jollibee', 'Jollibee', 'dining'],
+    ['lotteria', 'Lotteria', 'dining'],
+    ['kfc', 'KFC', 'dining'],
+    ['mcdonald', "McDonald's", 'dining'],
+    ['pizza 4p', "Pizza 4P's", 'dining'],
+    ['pizza hut', 'Pizza Hut', 'dining'],
+    ['domino', "Domino's", 'dining'],
+    ['subway', 'Subway', 'dining'],
+    ['shopeefood', 'ShopeeFood', 'dining'],
+    ['grabfood', 'GrabFood', 'dining'],
+    // Vietnam — transport
+    ['xanh sm', 'Xanh SM', 'transport'],
+    ['grab', 'Grab', 'transport'],
+    ['gojek', 'Gojek', 'transport'],
+    ['petrolimex', 'Petrolimex', 'transport'],
+    ['vietjet', 'Vietjet', 'travel'],
+    ['vietnam airlines', 'Vietnam Airlines', 'travel'],
+    ['bamboo airways', 'Bamboo Airways', 'travel'],
+    // Vietnam — health / shopping / bills
+    ['pharmacity', 'Pharmacity', 'health'],
+    ['long chau', 'Long Châu', 'health'],
+    ['an khang', 'An Khang', 'health'],
+    ['guardian', 'Guardian', 'personal'],
+    ['watsons', 'Watsons', 'personal'],
+    ['uniqlo', 'Uniqlo', 'shopping'],
+    ['the gioi di dong', 'Thế Giới Di Động', 'shopping'],
+    ['dien may xanh', 'Điện Máy Xanh', 'shopping'],
+    ['fpt shop', 'FPT Shop', 'shopping'],
+    ['cgv', 'CGV', 'entertainment'],
+    ['galaxy cinema', 'Galaxy Cinema', 'entertainment'],
+    ['evn', 'EVN', 'bills'],
+    ['viettel', 'Viettel', 'bills'],
+    ['vinaphone', 'Vinaphone', 'bills'],
+    ['mobifone', 'MobiFone', 'bills'],
+    // Australia
+    ['woolworths', 'Woolworths', 'groceries'],
+    ['coles', 'Coles', 'groceries'],
+    ['aldi', 'Aldi', 'groceries'],
+    ['iga', 'IGA', 'groceries'],
+    ['harris farm', 'Harris Farm', 'groceries'],
+    ['costco', 'Costco', 'groceries'],
+    ['chemist warehouse', 'Chemist Warehouse', 'health'],
+    ['priceline', 'Priceline', 'health'],
+    ['bunnings', 'Bunnings', 'shopping'],
+    ['kmart', 'Kmart', 'shopping'],
+    ['target', 'Target', 'shopping'],
+    ['jb hi-fi', 'JB Hi-Fi', 'shopping'],
+    ['jb hifi', 'JB Hi-Fi', 'shopping'],
+    ['officeworks', 'Officeworks', 'shopping'],
+    ['big w', 'Big W', 'shopping'],
+    ['ikea', 'IKEA', 'shopping'],
+    ['uber eats', 'Uber Eats', 'dining'],
+    ['ubereats', 'Uber Eats', 'dining'],
+    ['menulog', 'Menulog', 'dining'],
+    ['doordash', 'DoorDash', 'dining'],
+    ['hungry jack', "Hungry Jack's", 'dining'],
+    ['guzman', 'Guzman y Gomez', 'dining'],
+    ['uber', 'Uber', 'transport'],
+    ['didi', 'DiDi', 'transport'],
+    ['opal', 'Opal', 'transport'],
+    ['myki', 'Myki', 'transport'],
+    ['ampol', 'Ampol', 'transport'],
+    ['bp ', 'BP', 'transport'],
+    ['shell', 'Shell', 'transport'],
+    ['7eleven', '7-Eleven', 'groceries'],
+    ['qantas', 'Qantas', 'travel'],
+    ['jetstar', 'Jetstar', 'travel'],
+    ['virgin australia', 'Virgin Australia', 'travel'],
+    ['airbnb', 'Airbnb', 'travel'],
+    ['booking.com', 'Booking.com', 'travel'],
+    ['agoda', 'Agoda', 'travel'],
+    ['event cinemas', 'Event Cinemas', 'entertainment'],
+    ['hoyts', 'Hoyts', 'entertainment'],
+    ['telstra', 'Telstra', 'bills'],
+    ['optus', 'Optus', 'bills'],
+    ['agl', 'AGL', 'bills'],
+    ['origin energy', 'Origin Energy', 'bills'],
+  ];
+
+  /** Generic keywords → category, used when no known merchant matches. */
+  const CATEGORY_KEYWORDS = {
+    dining: [
+      'cafe', 'coffee', 'ca phe', 'caphe', 'restaurant', 'nha hang', 'quan ',
+      'pho', 'bun ', 'com tam', 'banh mi', 'bistro', 'bar ', 'pub', 'bia',
+      'beer', 'tra sua', 'milk tea', 'bakery', 'kitchen', 'grill', 'sushi',
+      'bbq', 'lau', 'food', 'gelato', 'ice cream', 'dessert', 'donut', 'juice', 'smoothie', 'dining', 'eatery', 'pizza', 'burger', 'noodle',
+    ],
+    groceries: [
+      'supermarket', 'sieu thi', 'mart', 'grocer', 'market', 'cho ',
+      'convenience', 'tap hoa', 'fresh', 'butcher', 'fruit',
+    ],
+    transport: [
+      'taxi', 'xang', 'petrol', 'fuel', 'parking', 'gui xe', 'toll', 'ride',
+      'metro', 'bus ', 'train', 'transit',
+    ],
+    health: [
+      'pharmacy', 'nha thuoc', 'chemist', 'clinic', 'phong kham', 'hospital',
+      'benh vien', 'dental', 'nha khoa', 'medical', 'doctor',
+    ],
+    personal: ['salon', 'spa', 'hair', 'toc', 'nail', 'barber', 'massage', 'cat toc'],
+    bills: [
+      'electric', 'dien luc', 'water', 'nuoc', 'internet', 'mobile', 'telecom',
+      'utility', 'insurance', 'bao hiem',
+    ],
+    entertainment: ['cinema', 'rap phim', 'karaoke', 'ticket', 've ', 'game', 'concert', 'museum'],
+    travel: ['hotel', 'khach san', 'resort', 'hostel', 'homestay', 'airline', 'flight', 'airport'],
+    shopping: ['store', 'shop', 'cua hang', 'fashion', 'thoi trang', 'electronics', 'boutique', 'mall'],
+  };
+
+  // ---------------------------------------------------------------------------
+  // Text helpers
+  // ---------------------------------------------------------------------------
+
+  /** Lower-case and strip Vietnamese diacritics so "Tổng cộng" → "tong cong". */
+  function fold(str) {
+    return String(str || '')
+      .normalize('NFD')
+      .replace(/[̀-ͯ]/g, '')
+      .replace(/đ/g, 'd')
+      .replace(/Đ/g, 'D')
+      .toLowerCase();
+  }
+
+  /**
+   * Parse a money token in any common format.
+   * "1,234.56" → 1234.56, "1.234,56" → 1234.56, "125.000" → 125000,
+   * "125,000đ" → 125000, "12.50" → 12.5, "4,50" → 4.5
+   */
+  function parseMoney(token) {
+    if (token == null) return NaN;
+    let s = String(token).replace(/[^\d.,]/g, '');
+    if (!s || !/\d/.test(s)) return NaN;
+    s = s.replace(/^[.,]+|[.,]+$/g, '');
+    const lastDot = s.lastIndexOf('.');
+    const lastComma = s.lastIndexOf(',');
+
+    if (lastDot >= 0 && lastComma >= 0) {
+      // Both present: whichever comes last is the decimal separator.
+      const decSep = lastDot > lastComma ? '.' : ',';
+      const thouSep = decSep === '.' ? ',' : '.';
+      s = s.split(thouSep).join('').replace(decSep, '.');
+      return Number(s);
+    }
+
+    const sep = lastDot >= 0 ? '.' : lastComma >= 0 ? ',' : null;
+    if (!sep) return Number(s);
+
+    const parts = s.split(sep);
+    const tail = parts[parts.length - 1];
+    // Multiple separators of one kind, or exactly 3 trailing digits → thousands.
+    if (parts.length > 2 || tail.length === 3) {
+      return Number(parts.join(''));
+    }
+    // 1–2 trailing digits → decimal.
+    return Number(parts.slice(0, -1).join('') + '.' + tail);
+  }
+
+  /** All money-looking numbers on a line, in order. */
+  function moneyTokens(line) {
+    const out = [];
+    const re = /\d{1,3}(?:[.,]\d{3})+(?:[.,]\d{1,2})?|\d+(?:[.,]\d{1,2})?/g;
+    let m;
+    while ((m = re.exec(line))) {
+      const n = parseMoney(m[0]);
+      if (Number.isFinite(n) && n > 0) out.push(n);
+    }
+    return out;
+  }
+
+  // ---------------------------------------------------------------------------
+  // Field extraction
+  // ---------------------------------------------------------------------------
+
+  const CURRENCY_HINTS = [
+    { code: 'VND', re: /(₫|\bvnd\b|\bvnđ\b|\d\s?đ\b|\bdong\b)/i },
+    { code: 'AUD', re: /(a\$|\baud\b|\babn\b|\bgst\b|\beftpos\b)/i },
+    { code: 'SGD', re: /(s\$|\bsgd\b)/i },
+    { code: 'THB', re: /(฿|\bthb\b|\bbaht\b)/i },
+    { code: 'GBP', re: /(£|\bgbp\b|\bvat reg)/i },
+    { code: 'EUR', re: /(€|\beur\b)/i },
+    { code: 'KRW', re: /(₩|\bkrw\b)/i },
+    { code: 'JPY', re: /(\bjpy\b|円)/i },
+    { code: 'USD', re: /(us\$|\busd\b)/i },
+  ];
+
+  function detectCurrency(text, fallback) {
+    const folded = String(text || '');
+    for (const hint of CURRENCY_HINTS) {
+      if (hint.re.test(folded)) return { code: hint.code, detected: true };
+    }
+    // Vietnamese receipt words without an explicit symbol → VND.
+    const f = fold(text);
+    if (/(tong cong|thanh tien|hoa don|thanh toan|tien mat|khach hang)/.test(f)) {
+      return { code: 'VND', detected: true };
+    }
+    return { code: fallback || 'USD', detected: false };
+  }
+
+  // Ordered best → weakest. Folded (no diacritics) matching.
+  const TOTAL_KEYWORDS = [
+    /\b(grand total|amount due|balance due|total due|total payable|amount payable)\b/,
+    /\b(khach (can|phai) tra|can thanh toan|tong thanh toan|tong tien thanh toan|so tien thanh toan)\b/,
+    /\b(tong cong|tong tien|thanh tien|tong)\b/,
+    /\b(total|amount|eftpos|card|visa|mastercard|paid|thanh toan)\b/,
+  ];
+  const EXCLUDE_LINE = /(sub ?total|tam tinh|tax|gst|vat|thue|change|tien thoi|tien thua|tien khach dua|cash tendered|tendered|rounding|discount|giam gia|so luong|qty|quantity|points|diem|saving|you saved|\*{3,}|x{4,}|auth|approval|ref no|terminal)/;
+
+  function extractTotal(text) {
+    const lines = String(text || '').split(/\r?\n/).map((l) => l.trim()).filter(Boolean);
+    for (let rank = 0; rank < TOTAL_KEYWORDS.length; rank++) {
+      // Walk from the bottom: totals sit near the end of a receipt.
+      for (let i = lines.length - 1; i >= 0; i--) {
+        const f = fold(lines[i]);
+        // "Total incl. GST 45.20" is a total; "GST included in total 4.11" is not.
+        const forExclude = f.replace(/\b(inc|incl|including|da bao gom|bao gom)\.? ?(gst|tax|vat|thue)\b/g, '');
+        if (!TOTAL_KEYWORDS[rank].test(f) || EXCLUDE_LINE.test(forExclude)) continue;
+        let nums = moneyTokens(lines[i]);
+        // Amount is sometimes on the next line.
+        if (!nums.length && lines[i + 1]) nums = moneyTokens(lines[i + 1]);
+        if (nums.length) {
+          return { amount: nums[nums.length - 1], confidence: rank <= 2 ? 'high' : 'medium' };
+        }
+      }
+    }
+    // Fallback: the largest plausible amount, ignoring long ID-like digit runs.
+    let best = NaN;
+    for (const line of lines) {
+      if (/\d{9,}/.test(line.replace(/[\s.,]/g, '')) && !/[.,]\d{3}\b/.test(line)) continue;
+      for (const n of moneyTokens(line)) {
+        if (!Number.isFinite(best) || n > best) best = n;
+      }
+    }
+    return { amount: best, confidence: Number.isFinite(best) ? 'low' : 'none' };
+  }
+
+  function escapeRe(s) {
+    return s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+  }
+
+  /** Whole-word match so "iga" doesn't hit "gigabyte" or "pho" hit "phone". */
+  function hasWord(haystack, word) {
+    const w = word.trim();
+    return new RegExp(`(^|[^a-z0-9])${escapeRe(w)}([^a-z0-9]|$)`).test(haystack);
+  }
+
+  function findKnownMerchant(text) {
+    const f = fold(text).replace(/\s+/g, ' ');
+    for (const [key, name, category] of KNOWN_MERCHANTS) {
+      if (hasWord(f, key)) return { name, category };
+    }
+    return null;
+  }
+
+  const NOT_MERCHANT = /(receipt|tax invoice|invoice|hoa don|phieu|bien nhan|abn|mst|ma so thue|tel|phone|dien thoai|dt:|date|ngay|time|gio|cashier|thu ngan|table|ban so|order|www\.|http|@|address|dia chi|welcome|xin chao|cam on|thank)/;
+
+  function extractMerchant(text) {
+    const known = findKnownMerchant(text);
+    if (known) return { name: known.name, knownCategory: known.category };
+    const lines = String(text || '').split(/\r?\n/).map((l) => l.trim()).filter(Boolean);
+    for (const line of lines.slice(0, 6)) {
+      const letters = (line.match(/\p{L}/gu) || []).length;
+      if (letters < 3) continue;
+      if (NOT_MERCHANT.test(fold(line))) continue;
+      if (letters / line.length < 0.5) continue; // mostly digits/symbols → address or noise
+      return { name: tidyName(line), knownCategory: null };
+    }
+    return { name: '', knownCategory: null };
+  }
+
+  function tidyName(line) {
+    const clean = line.replace(/[|_*=~#"“”‘’`´]+/g, ' ').replace(/\s+/g, ' ').trim().slice(0, 60);
+    // Title-case shouty receipt headers: "PHO HOA PASTEUR" → "Pho Hoa Pasteur".
+    if (clean === clean.toUpperCase()) {
+      return clean.toLowerCase().replace(/(^|\s)(\p{L})/gu, (m, s, c) => s + c.toUpperCase());
+    }
+    return clean;
+  }
+
+  function pad(n) {
+    return String(n).padStart(2, '0');
+  }
+
+  /** Day-first (AU / VN). Returns YYYY-MM-DD or ''. */
+  function extractDate(text, today) {
+    const s = String(text || '');
+    const now = today ? new Date(today) : new Date();
+    let m = s.match(/\b(20\d{2})[-/.](\d{1,2})[-/.](\d{1,2})\b/);
+    if (m) return valid(+m[1], +m[2], +m[3]);
+    m = s.match(/\b(\d{1,2})[-/.](\d{1,2})[-/.](\d{2,4})\b/);
+    if (m) {
+      let y = +m[3];
+      if (y < 100) y += 2000;
+      return valid(y, +m[2], +m[1]);
+    }
+    return '';
+
+    function valid(y, mo, d) {
+      if (mo < 1 || mo > 12 || d < 1 || d > 31) return '';
+      const iso = `${y}-${pad(mo)}-${pad(d)}`;
+      // Reject future dates beyond a day of clock skew and anything absurdly old.
+      const t = Date.parse(iso);
+      if (!Number.isFinite(t) || t > now.getTime() + 86400000 || y < 2000) return '';
+      return iso;
+    }
+  }
+
+  /**
+   * @param {string} merchant
+   * @param {string} [fullText]
+   * @param {Record<string,string>} [learned] merchant(lower) → category id
+   */
+  function categorise(merchant, fullText, learned) {
+    const key = fold(merchant).trim();
+    if (key && learned && learned[key]) return learned[key];
+    const known = findKnownMerchant(merchant) || findKnownMerchant(fullText || '');
+    if (known) return known.category;
+    const hay = fold(merchant + ' ' + (fullText || '')).replace(/\s+/g, ' ');
+    let best = 'other';
+    let bestScore = 0;
+    for (const [cat, words] of Object.entries(CATEGORY_KEYWORDS)) {
+      let score = 0;
+      // Words in the merchant name count triple: "Phở Hòa" beats a stray "water" line.
+      for (const w of words) if (hasWord(hay, w)) score += hasWord(key, w) ? 3 : 1;
+      if (score > bestScore) {
+        best = cat;
+        bestScore = score;
+      }
+    }
+    return best;
+  }
+
+  /**
+   * Full pipeline for OCR text.
+   * @returns {{merchant:string, amount:number, currency:string, date:string, category:string, confidence:string, currencyDetected:boolean}}
+   */
+  function parseReceiptText(text, options = {}) {
+    const total = extractTotal(text);
+    const merchant = extractMerchant(text);
+    const currency = detectCurrency(text, options.defaultCurrency);
+    const date = extractDate(text, options.today) || todayIso(options.today);
+    const category = categorise(merchant.name, text, options.learned);
+    return {
+      merchant: merchant.name,
+      amount: total.amount,
+      currency: currency.code,
+      currencyDetected: currency.detected,
+      date,
+      category,
+      confidence: total.confidence,
+    };
+  }
+
+  function todayIso(today) {
+    const d = today ? new Date(today) : new Date();
+    return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
+  }
+
+  // ---------------------------------------------------------------------------
+  // Analysis
+  // ---------------------------------------------------------------------------
+
+  /** Inclusive [from, to] YYYY-MM-DD bounds for a named period. */
+  function periodBounds(period, today) {
+    const d = today ? new Date(today) : new Date();
+    const y = d.getFullYear();
+    const m = d.getMonth();
+    const iso = (dt) => `${dt.getFullYear()}-${pad(dt.getMonth() + 1)}-${pad(dt.getDate())}`;
+    switch (period) {
+      case 'this-month':
+        return { from: iso(new Date(y, m, 1)), to: iso(new Date(y, m + 1, 0)) };
+      case 'last-month':
+        return { from: iso(new Date(y, m - 1, 1)), to: iso(new Date(y, m, 0)) };
+      case 'last-3-months':
+        return { from: iso(new Date(y, m - 2, 1)), to: iso(new Date(y, m + 1, 0)) };
+      case 'this-year':
+        return { from: `${y}-01-01`, to: `${y}-12-31` };
+      default:
+        return { from: '0000-01-01', to: '9999-12-31' };
+    }
+  }
+
+  /**
+   * @param {Array} receipts
+   * @param {{from:string,to:string}} bounds
+   * @param {(amount:number, code:string) => number} toReporting  NaN when no rate
+   */
+  function analyse(receipts, bounds, toReporting) {
+    const inRange = (receipts || []).filter((r) => r.date >= bounds.from && r.date <= bounds.to);
+    const byCategory = {};
+    const byMerchant = {};
+    const byMonth = {};
+    let total = 0;
+    let skipped = 0;
+
+    for (const r of inRange) {
+      const v = toReporting(Number(r.amount), r.currency);
+      if (!Number.isFinite(v)) {
+        skipped++;
+        continue;
+      }
+      total += v;
+      byCategory[r.category] = (byCategory[r.category] || 0) + v;
+      const mk = r.merchant || 'Unknown';
+      if (!byMerchant[mk]) byMerchant[mk] = { total: 0, count: 0, category: r.category };
+      byMerchant[mk].total += v;
+      byMerchant[mk].count++;
+      const month = r.date.slice(0, 7);
+      byMonth[month] = (byMonth[month] || 0) + v;
+    }
+
+    const counted = inRange.length - skipped;
+    return {
+      total,
+      count: counted,
+      skipped,
+      average: counted ? total / counted : 0,
+      categories: Object.entries(byCategory)
+        .map(([id, amount]) => ({ id, amount, share: total ? amount / total : 0 }))
+        .sort((a, b) => b.amount - a.amount),
+      merchants: Object.entries(byMerchant)
+        .map(([name, v]) => ({ name, ...v }))
+        .sort((a, b) => b.total - a.total),
+      months: Object.entries(byMonth)
+        .map(([month, amount]) => ({ month, amount }))
+        .sort((a, b) => (a.month < b.month ? -1 : 1)),
+    };
+  }
+
+  /** CSV of data points only (no images, nothing else). */
+  function toCsv(receipts) {
+    const esc = (v) => {
+      const s = String(v == null ? '' : v);
+      return /[",\n]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s;
+    };
+    const rows = [['date', 'merchant', 'amount', 'currency', 'category']];
+    for (const r of receipts) {
+      rows.push([r.date, r.merchant, r.amount, r.currency, labelFor(r.category)]);
+    }
+    return rows.map((row) => row.map(esc).join(',')).join('\n');
+  }
+
+  function labelFor(id) {
+    const c = CATEGORIES.find((x) => x.id === id);
+    return c ? c.label : id;
+  }
+
+  return {
+    CATEGORIES,
+    fold,
+    parseMoney,
+    moneyTokens,
+    detectCurrency,
+    extractTotal,
+    extractMerchant,
+    extractDate,
+    categorise,
+    parseReceiptText,
+    periodBounds,
+    analyse,
+    toCsv,
+    labelFor,
+    todayIso,
+  };
+});
