@@ -7,6 +7,7 @@ countries, including international moves and ongoing bills back home.
 ## Current capabilities
 
 - Homepage with two ways in: guided financial journeys (question-led) or straight to the calculators.
+- Journey calculators: spending breakdown, savings capacity, money snapshot, emergency fund, financial runway, savings goal and income change. Each gives one answer, the figures behind it and the levers that change it (see `docs/journeys.md`).
 
 - Normalize income and expenses across common payment frequencies.
 - Enter expenses in different currencies and report a combined total.
@@ -38,7 +39,8 @@ npm test
 ## Project map
 
 - `index.html`, `styles.css`, `script.js`: current static application.
-- `home.js`, `home.css`: Home, Financial journeys, Calculators, About and Coming soon views; routes into the calculator via `#go/<id>`.
+- `home.js`, `home.css`: Home, Financial journeys, Calculators and About views; links into calculators via `#tool/<id>[/<preset>]` and the planner via `#go/income`.
+- `journey-core.js`: pure maths for the journey calculators (unit tested). `journeys.js`: their pages.
 - `budget-core.js`: DOM-independent budget and currency logic.
 - `tests/`: automated tests.
 - `docs/`: product, design, architecture, API, and data documentation.

@@ -1,168 +1,93 @@
 /**
- * Site views around the calculator: Home, Financial journeys, Calculators,
- * About and "Coming soon" pages, all on one page via the URL hash.
+ * Site views around the budget planner: Home, Financial journeys, Calculators,
+ * About and the journey calculators, all on one page via the URL hash.
  *
  *   #home (or no hash) · #journeys · #calculators · #about
- *   #soon/<tool>   placeholder for a calculator that doesn't exist yet
- *   #go/<id>       open the existing calculator at the right step, with guidance
+ *   #tool/<id>[/<preset>]   a journey calculator (journeys.js)
+ *   #go/income     the budget planner, with guidance
+ *   #soon/<tool>   old placeholder links; redirect to the real calculator
  *   #income …      the calculator tabs themselves (handled by nav.js)
  *
- * Every journey, calculator and question routes into the same calculator and
- * data — nothing here does maths of its own.
+ * Every journey, calculator and question opens a calculator that shares the
+ * planner's figures; the maths lives in journey-core.js, not here.
  */
 (function () {
   'use strict';
 
-  const SITE_VIEWS = ['home', 'journeys', 'calculators', 'about', 'soon'];
+  const SITE_VIEWS = ['home', 'journeys', 'calculators', 'about', 'tool'];
   const APP_TABS = ['income', 'expenses', 'spending', 'summary'];
   const mobile = window.matchMedia('(max-width: 900px)');
   const $ = (id) => document.getElementById(id);
 
   // ---------------------------------------------------------------------------
-  // Tools: what exists today, and what's planned
+  // Content: every journey, question and calculator opens a real calculator
+  // (journeys.js) at #tool/<id>[/<preset>]. The budget planner is #go/income.
   // ---------------------------------------------------------------------------
 
-  const TOOLS = {
-    income: {
-      name: 'Income & expenses',
-      answer: 'What comes in and what goes out each month, in any currency.',
-      go: 'income',
-    },
-    savings: {
-      name: 'Monthly savings capacity',
-      answer: 'What’s genuinely left after your costs, per day, week, month or year.',
-      go: 'savings',
-    },
-    goals: {
-      name: 'Savings goals',
-      answer: 'Split your income between savings, an emergency fund and investing.',
-      go: 'goals',
-    },
-    breakdown: {
-      name: 'Spending breakdown',
-      answer: 'Which of your regular costs take the biggest share.',
-      go: 'breakdown',
-    },
-    emergency: {
-      name: 'Emergency fund',
-      answer: 'How big a safety buffer to aim for, based on your essential costs.',
-      soon: true,
-    },
-    runway: {
-      name: 'Financial runway',
-      answer: 'How many months your savings would last if your income stopped or dropped.',
-      soon: true,
-    },
-  };
+  const CALCULATORS = [
+    { to: 'go/income', name: 'Budget planner', answer: 'Income, costs and your savings split, in any currency. The figures every other calculator can use.' },
+    { to: 'tool/breakdown', name: 'Spending breakdown', answer: 'Which costs take the biggest share, and how much is flexible.' },
+    { to: 'tool/capacity', name: 'Savings capacity', answer: 'What’s genuinely left to save each month and each year.' },
+    { to: 'tool/snapshot', name: 'Money snapshot', answer: 'Savings rate, fixed costs, biggest cost and runway at a glance.' },
+    { to: 'tool/emergency', name: 'Emergency fund', answer: 'A target for 3, 6 or 12 months of essentials, and when you’ll get there.' },
+    { to: 'tool/runway', name: 'Financial runway', answer: 'How many months your savings would last without an income.' },
+    { to: 'tool/goal', name: 'Savings goal', answer: 'When you’ll reach a target, or what it takes to hit a deadline.' },
+    { to: 'tool/income', name: 'Income change', answer: 'What’s left each month if your income goes down, or you switch careers.' },
+  ];
 
-  // Placeholder pages for tools that aren't built yet: say what's coming and
-  // point to the closest thing that works today.
-  const SOON = {
-    emergency: {
-      title: 'Emergency fund calculator',
-      what: 'Will work out how big a safety buffer to aim for from your essential monthly costs, and how long it would take to build at the rate you’re saving.',
-      today: 'Add up your fixed costs. That monthly total is what an emergency fund needs to cover, and you can already set how much goes into one each month.',
-      link: { go: 'goals', label: 'Set your emergency fund contribution' },
-    },
-    runway: {
-      title: 'Financial runway calculator',
-      what: 'Will show how many months your savings would last if your income stopped or dropped: for time off, a career break or losing your job.',
-      today: 'Start with what a month costs you. Your total monthly expenses are what each month of runway needs to cover.',
-      link: { go: 'living', label: 'Work out your monthly costs' },
-    },
-  };
-
-  // Deep links into the existing calculator, with the guidance shown on arrival.
+  // Opening the budget planner directly, with guidance.
   const GO = {
-    income: { tab: 'income', q: 'Income & expenses', guide: 'Enter your income, then add your expenses step by step.' },
-    savings: { tab: 'summary', q: 'Monthly savings capacity', guide: 'This is what’s left each month. Fill in Income and Expenses first if it’s empty.' },
-    goals: { tab: 'expenses', group: 'goals', q: 'Savings goals', guide: 'Set what share of your income goes to each goal. The starting split is only a suggestion.' },
-    breakdown: { tab: 'summary', scroll: '.chart-panel', q: 'Spending breakdown', guide: 'Your costs by type. Add expenses to fill it in.' },
-    'where-money-goes': {
-      tab: 'expenses', group: 'fixed', q: 'Where does my money go each month?',
-      guide: 'Add your regular costs one step at a time. Summary then shows which ones take the biggest share.',
-    },
-    'realistic-saving': {
-      tab: 'income', q: 'How much can I realistically save?',
-      guide: 'Enter your income, then your expenses. Summary shows what’s genuinely left each month.',
-    },
-    'big-picture': {
-      tab: 'summary', q: 'What does my financial situation look like?',
-      guide: 'Income, costs, savings and what’s left, in one place. Fill in Income and Expenses if it’s empty.',
-    },
-    'savings-goal': {
-      tab: 'expenses', group: 'goals', q: 'How can I reach my savings goal?',
-      guide: 'Decide how much goes toward each goal every month. Working out how long a target takes is coming later.',
-    },
-    'income-drop': {
-      tab: 'income', q: 'What happens if my income decreases?',
-      guide: 'Save your current plan as a scenario first. Then lower your income and watch what’s left change.',
-    },
-    'career-change': {
-      tab: 'income', q: 'Could I afford to change careers?',
-      guide: 'Enter the salary you’d expect in the new role. Your costs stay the same, so you can see if it still adds up. Save each version as a scenario to compare.',
-    },
-    living: {
-      tab: 'expenses', group: 'fixed', q: 'How much does it really cost to live each month?',
-      guide: 'Add every regular cost: fixed, variable and subscriptions. The total is your true monthly cost of living.',
-    },
-    'year-saving': {
-      tab: 'summary', period: 'year', q: 'How much can I save over the next year?',
-      guide: 'Showing a full year. Fill in Income and Expenses first if it’s empty.',
-    },
-    'work-less': {
-      tab: 'income', q: 'Could I afford to work less?',
-      guide: 'Lower your income to what you’d earn working less, and see whether your costs are still covered.',
-    },
-    'income-needed': {
-      tab: 'expenses', group: 'fixed', q: 'How much income do I need to cover my expenses?',
-      guide: 'Add your costs. Your total expenses in Summary is the income you need to cover them.',
-    },
+    income: { tab: 'income', q: 'Budget planner', guide: 'Enter your income, then add your costs step by step. Summary shows what’s left.' },
   };
 
-  // Journeys: question-led, in plain language. `go` opens a working tool,
-  // `soon` opens its placeholder page.
   const JOURNEYS = [
     {
       title: 'Understand my money',
       desc: 'Get a clear picture of what comes in, what goes out and what’s left.',
       items: [
-        { q: 'Where does my money go each month?', d: 'List your regular costs and see which ones take the biggest share.', go: 'where-money-goes', tool: 'breakdown' },
-        { q: 'How much can I realistically save?', d: 'Take what you earn, subtract what you spend, and see what’s genuinely left.', go: 'realistic-saving', tool: 'savings' },
-        { q: 'What does my financial situation look like?', d: 'One calm overview of income, costs, savings and what’s left over.', go: 'big-picture', tool: 'savings' },
+        { q: 'Where does my money go each month?', d: 'See your costs ranked, and which ones you can actually change.', to: 'tool/breakdown' },
+        { q: 'How much can I realistically save?', d: 'What’s genuinely left after every cost, per month and per year.', to: 'tool/capacity' },
+        { q: 'What does my financial situation look like?', d: 'Four plain readings: savings rate, fixed costs, biggest cost and runway.', to: 'tool/snapshot' },
       ],
     },
     {
       title: 'Build my financial safety net',
       desc: 'Work out what a buffer looks like for you, and how to get there.',
       items: [
-        { q: 'How much should I have in an emergency fund?', d: 'Find a buffer size that matches your essential costs.', soon: 'emergency' },
-        { q: 'How long could I manage without an income?', d: 'See how many months your savings would cover.', soon: 'runway' },
-        { q: 'How can I reach my savings goal?', d: 'Decide how much of your income goes toward each goal every month.', go: 'savings-goal', tool: 'goals' },
+        { q: 'How much should I have in an emergency fund?', d: 'A target from your essential costs, and when you’ll reach it.', to: 'tool/emergency' },
+        { q: 'How long could I manage without an income?', d: 'How many months your savings would cover, and with essentials only.', to: 'tool/runway' },
+        { q: 'How can I reach my savings goal?', d: 'When you’ll get there, or what to save each month to hit a date.', to: 'tool/goal' },
       ],
     },
     {
       title: 'Plan a big life change',
       desc: 'Test a change before you make it.',
       items: [
-        { q: 'Could I afford to take six months off?', d: 'See whether your savings would cover six months of costs.', soon: 'runway' },
-        { q: 'What happens if my income decreases?', d: 'Compare today’s plan with a lower income, side by side.', go: 'income-drop', tool: 'income' },
-        { q: 'Could I afford to change careers?', d: 'Try a new salary against your current costs.', go: 'career-change', tool: 'income' },
-        { q: 'What would happen if I lost my job?', d: 'Find out how long you could cover your costs.', soon: 'runway' },
+        { q: 'Could I afford to take six months off?', d: 'Yes or no, and how much you’d have left or need to save.', to: 'tool/runway/timeoff' },
+        { q: 'What happens if my income decreases?', d: 'What’s left each month on a lower income, and for how long savings cover a gap.', to: 'tool/income' },
+        { q: 'Could I afford to change careers?', d: 'The cost of the switch, and when a new salary puts you ahead.', to: 'tool/income/career' },
+        { q: 'What would happen if I lost my job?', d: 'How long your savings and any payout would last.', to: 'tool/runway/jobloss' },
       ],
     },
   ];
 
   const QUESTIONS = [
-    { q: 'How much does it really cost to live each month?', go: 'living' },
-    { q: 'How much should I save before leaving my job?', soon: 'runway' },
-    { q: 'How much can I save over the next year?', go: 'year-saving' },
-    { q: 'How much do I need in an emergency fund?', soon: 'emergency' },
-    { q: 'Could I afford to work less?', go: 'work-less' },
-    { q: 'How much income do I need to cover my expenses?', go: 'income-needed' },
+    { q: 'How much does it really cost to live each month?', to: 'tool/breakdown/living' },
+    { q: 'How much should I save before leaving my job?', to: 'tool/runway/leave' },
+    { q: 'How much can I save over the next year?', to: 'tool/capacity/year' },
+    { q: 'How much do I need in an emergency fund?', to: 'tool/emergency' },
+    { q: 'Could I afford to work less?', to: 'tool/income/less' },
+    { q: 'How much income do I need to cover my expenses?', to: 'tool/capacity/needed' },
   ];
 
-  const hrefFor = (item) => (item.soon ? `#soon/${item.soon}` : `#go/${item.go}`);
+  /** Name of the calculator a link opens, for "Uses …" labels. */
+  function toolName(to) {
+    const id = to.split('/')[1];
+    const t = window.BudgetTools && window.BudgetTools.TOOLS[id];
+    return t ? t.name : 'Budget planner';
+  }
+
+  const hrefFor = (item) => `#${item.to}`;
 
   // ---------------------------------------------------------------------------
   // Rendering (static content; built once)
@@ -175,10 +100,6 @@
     return n;
   }
 
-  function soonPill() {
-    return el('span', 'status-pill', 'Coming soon');
-  }
-
   function renderQuestions() {
     const list = $('questionList');
     if (!list) return;
@@ -187,8 +108,7 @@
       const a = el('a', 'question-link');
       a.href = hrefFor(item);
       a.appendChild(el('span', 'question-text', item.q));
-      if (item.soon) a.appendChild(soonPill());
-      else a.appendChild(el('span', 'question-arrow', '→')).setAttribute('aria-hidden', 'true');
+      a.appendChild(el('span', 'question-arrow', '→')).setAttribute('aria-hidden', 'true');
       li.appendChild(a);
       list.appendChild(li);
     });
@@ -207,13 +127,12 @@
       const ul = el('ul', 'journey-list');
       group.items.forEach((item) => {
         const li = el('li');
-        const a = el('a', 'journey-card' + (item.soon ? ' is-soon' : ''));
+        const a = el('a', 'journey-card');
         a.href = hrefFor(item);
         a.appendChild(el('h3', 'journey-q', item.q));
         a.appendChild(el('p', 'journey-d', item.d));
         const meta = el('span', 'journey-meta');
-        if (item.soon) meta.appendChild(soonPill());
-        else meta.textContent = `Uses ${TOOLS[item.tool].name} →`;
+        meta.textContent = `Uses ${toolName(item.to)} →`;
         a.appendChild(meta);
         li.appendChild(a);
         ul.appendChild(li);
@@ -224,31 +143,18 @@
   }
 
   function renderTools() {
-    const list = $('toolList');
+    const list = $('calcList');
     if (!list) return;
-    Object.entries(TOOLS).forEach(([id, tool]) => {
+    CALCULATORS.forEach((tool) => {
       const li = el('li');
-      const a = el('a', 'tool-card' + (tool.soon ? ' is-soon' : ''));
-      a.href = tool.soon ? `#soon/${id}` : `#go/${tool.go}`;
+      const a = el('a', 'tool-card' + (tool.to === 'go/income' ? ' tool-card--planner' : ''));
+      a.href = `#${tool.to}`;
       a.appendChild(el('h2', 'tool-name', tool.name));
-      a.appendChild(el('p', 'tool-answer', tool.answer));
-      if (tool.soon) a.appendChild(soonPill());
-      else a.appendChild(el('span', 'tool-open', 'Open →'));
+      a.appendChild(el('p', 'tool-desc', tool.answer));
+      a.appendChild(el('span', 'tool-open', 'Open →'));
       li.appendChild(a);
       list.appendChild(li);
     });
-  }
-
-  function renderSoon(id) {
-    const s = SOON[id];
-    if (!s) return false;
-    $('soonTitle').textContent = s.title;
-    $('soonWhat').textContent = s.what;
-    $('soonToday').textContent = s.today;
-    const link = $('soonTodayLink');
-    link.href = `#go/${s.link.go}`;
-    link.textContent = `${s.link.label} →`;
-    return true;
   }
 
   // ---------------------------------------------------------------------------
@@ -256,7 +162,7 @@
   // ---------------------------------------------------------------------------
 
   function setNavCurrent(view) {
-    const key = view === 'app' ? 'calculators' : view === 'soon' ? 'journeys' : view;
+    const key = view === 'app' || view === 'tool' ? 'calculators' : view;
     document.querySelectorAll('[data-nav]').forEach((a) => {
       if (a.dataset.nav === key) a.setAttribute('aria-current', 'page');
       else a.removeAttribute('aria-current');
@@ -293,7 +199,14 @@
       }
     }
     if (window.showBudgetTab) window.showBudgetTab(g.tab);
-    showBanner(g.q, g.guide);
+    let ret = null;
+    try {
+      ret = JSON.parse(sessionStorage.getItem('budgetBuddyReturn') || 'null');
+    } catch (e) {
+      /* ignore */
+    }
+    if (ret && ret.hash) showBanner(ret.q, 'Update your income and costs here, then go back to see your answer.', ret.hash);
+    else showBanner(g.q, g.guide);
     requestAnimationFrame(() => scrollToTarget(g));
   }
 
@@ -314,11 +227,15 @@
     window.scrollTo(0, Math.max(0, top));
   }
 
-  function showBanner(q, guide) {
+  function showBanner(q, guide, returnHash) {
     const b = $('journeyBanner');
     if (!b) return;
     $('journeyBannerQ').textContent = q;
     $('journeyBannerGuide').textContent = guide;
+    const ret = $('journeyBannerReturn');
+    ret.hidden = !returnHash;
+    if (returnHash) ret.href = returnHash;
+    $('journeyBannerAll').hidden = Boolean(returnHash);
     b.hidden = false;
   }
 
@@ -332,11 +249,26 @@
     if (APP_TABS.includes(hash)) return setNavCurrent('app'); // nav.js shows the tab
     const [view, arg] = hash.split('/');
     if (view === 'go') return openGo(arg);
-    if (view === 'soon') {
-      if (renderSoon(arg)) return showSiteView('soon');
-      return showSiteView('journeys');
+    // Old placeholder links now open the real calculators.
+    if (view === 'soon') return location.replace(`#tool/${arg === 'emergency' ? 'emergency' : 'runway'}`);
+    if (view === 'tool') {
+      try {
+        sessionStorage.removeItem('budgetBuddyReturn');
+      } catch (e) {
+        /* ignore */
+      }
+      const preset = hash.split('/')[2];
+      if (window.BudgetTools && window.BudgetTools.show(arg, preset)) return showSiteView('tool');
+      return showSiteView('calculators');
     }
-    showSiteView(SITE_VIEWS.includes(view) && view !== 'soon' ? view : 'home');
+    if (view !== 'go') {
+      try {
+        sessionStorage.removeItem('budgetBuddyReturn');
+      } catch (e) {
+        /* ignore */
+      }
+    }
+    showSiteView(SITE_VIEWS.includes(view) && view !== 'tool' ? view : 'home');
   }
 
   // ---------------------------------------------------------------------------
@@ -400,5 +332,5 @@
   route();
 
   // Exposed for tests.
-  window.BudgetHome = { TOOLS, GO, JOURNEYS, QUESTIONS, SOON };
+  window.BudgetHome = { CALCULATORS, GO, JOURNEYS, QUESTIONS };
 })();

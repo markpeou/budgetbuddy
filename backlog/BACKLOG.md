@@ -12,17 +12,21 @@ Parked ideas, roughly in priority order. Move an item into work by opening an is
 - **Measure real scan cost** after the first 20–30 scans (estimate: ~$0.0003–0.0005 per receipt on Haiku 5.5, so ~2,000 receipts per $1).
 - **Cloudflare Turnstile** on the worker if abuse shows up (worst case today ≈ $7/day from one scripted IP at 10 scans/min).
 
-## Calculators with placeholder pages
+## Journey calculators
 
-- **Emergency fund calculator** (`#soon/emergency`): target buffer from essential monthly costs, and time to build it. Linked from journeys and the question list.
-- **Financial runway calculator** (`#soon/runway`): months your savings last if income stops or drops. Powers "six months off", "lost my job", "manage without an income" and "save before leaving my job".
-- **Savings goal timeline**: how long a specific target takes at the current monthly contribution (journey currently routes to the goals split only).
+- **Keep the budget between visits.** The planner only keeps what's entered for the session unless it's saved as a scenario, so calculators fall back to typed figures on a return visit. Autosave the current budget.
+- Savings goal: several goals at once, each with its own target.
 
 ## Summary (after OCR is reliable)
 
 - Safe to spend today.
 - Insight cards (biggest categories, changes vs last month).
 - Plan vs actual by category (planned expenses vs scanned receipts).
+
+## Multi-country
+
+- **Savings held in more than one currency** (e.g. AUD at home, VND where you live), converted for runway and emergency fund.
+- **"Could I afford to move to another country?"** — compare cost of living and runway between two places. The original reason Budget Buddy was built.
 
 ## Other ideas
 

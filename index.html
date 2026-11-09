@@ -12,8 +12,8 @@
       href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700&display=swap"
       rel="stylesheet"
     />
-    <link rel="stylesheet" href="./styles.css?v=20261109q" />
-    <link rel="stylesheet" href="./home.css?v=20261109q" />
+    <link rel="stylesheet" href="./styles.css?v=20261109u" />
+    <link rel="stylesheet" href="./home.css?v=20261109u" />
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
   </head>
   <body data-view="home">
@@ -156,7 +156,8 @@
           <p class="journey-banner-guide" id="journeyBannerGuide"></p>
         </div>
         <div class="journey-banner-actions">
-          <a href="#journeys" class="journey-banner-link">All journeys</a>
+          <a href="#journeys" class="journey-banner-link journey-banner-return" id="journeyBannerReturn" hidden>Back to your answer →</a>
+          <a href="#journeys" class="journey-banner-link" id="journeyBannerAll">All journeys</a>
           <button type="button" class="journey-banner-close" id="journeyBannerClose" aria-label="Hide this guidance">✕</button>
         </div>
       </div>
@@ -223,19 +224,44 @@
         <a class="back-link" href="#home">← Home</a>
         <h1 class="page-title" id="calcTitle">Calculators</h1>
         <p class="page-lede">Go straight to the numbers. No sign-up and no questions first, and you can change every input.</p>
-        <ul class="tool-list" id="toolList"></ul>
+        <ul class="tool-list" id="calcList"></ul>
       </main>
 
-      <main class="site-view view-prose" id="view-soon" data-view="soon" aria-labelledby="soonTitle">
-        <a class="back-link" href="#journeys">← Financial journeys</a>
-        <p class="soon-pill">Coming soon</p>
-        <h1 class="page-title" id="soonTitle"></h1>
-        <p class="page-lede" id="soonWhat"></p>
-        <div class="soon-today">
-          <h2>What you can do today</h2>
-          <p id="soonToday"></p>
-          <a class="soon-today-link" id="soonTodayLink" href="#calculators"></a>
+      <main class="site-view view-tool" id="view-tool" data-view="tool" aria-labelledby="toolTitle">
+        <a class="back-link" id="toolBack" href="#journeys">← Financial journeys</a>
+        <p class="tool-kicker" id="toolKicker"></p>
+        <h1 class="page-title tool-title" id="toolTitle"></h1>
+
+        <section class="tool-answer" id="toolAnswer" aria-live="polite" data-state="">
+          <p class="tool-answer-main" id="toolAnswerMain"></p>
+          <p class="tool-answer-sub" id="toolAnswerSub"></p>
+          <div class="tool-targets" id="toolTargets" hidden></div>
+          <div class="tool-tiles" id="toolTiles" hidden></div>
+        </section>
+
+        <div class="tool-needs-budget" id="toolNeedsBudget" hidden>
+          <p id="toolNeedsBudgetText"></p>
+          <a href="#go/income" id="toolNeedsBudgetLink" class="tool-needs-budget-link">Open the budget planner →</a>
         </div>
+
+        <div class="tool-columns">
+          <section class="tool-section" id="toolAdjust" aria-labelledby="toolAdjustTitle">
+            <h2 id="toolAdjustTitle">Change the numbers</h2>
+            <div class="tool-fields" id="toolFields"></div>
+          </section>
+
+          <section class="tool-section" id="toolBehind" aria-labelledby="toolBehindTitle">
+            <h2 id="toolBehindTitle">Behind the answer</h2>
+            <dl class="tool-figures" id="toolFigures"></dl>
+            <ol class="tool-rank-list" id="toolRankList"></ol>
+            <ul class="tool-notes" id="toolNotes"></ul>
+          </section>
+        </div>
+
+        <p class="tool-source">
+          Figures in <span id="toolSourceCode"></span>, per month unless stated. Calculated in this browser.
+          <a href="#go/income" id="toolEditBudget">Edit your budget →</a>
+        </p>
       </main>
 
       <main class="site-view view-prose" id="view-about" data-view="about" aria-labelledby="aboutTitle">
@@ -248,6 +274,7 @@
           <li>Everything is converted to a monthly figure first. Weekly amounts are ×52÷12, fortnightly ×26÷12, quarterly ÷3 and yearly ÷12.</li>
           <li>Left over is your monthly income minus your expenses, minus what you set aside for savings and goals.</li>
           <li>Savings &amp; goals are percentages of your income. The starting split (50% expenses, 30% long-term savings, 10% emergency fund, 10% investments) is only a suggestion until you change it.</li>
+          <li>The journey calculators use the same figures. Essentials are your fixed costs. Runway rounds down to whole months; time to reach a target rounds up.</li>
           <li>Each expense can be in its own currency. Totals are converted using daily exchange rates from open.er-api.com, and show “—” if rates can’t be loaded rather than guessing.</li>
         </ul>
 
@@ -920,12 +947,14 @@
     </nav>
 
     <script src="./icons.js"></script>
-    <script src="./budget-core.js?v=20261109q"></script>
-    <script src="./script.js?v=20261109q"></script>
-    <script src="./receipt-core.js?v=20261109q"></script>
-    <script src="./receipts.js?v=20261109q"></script>
-    <script src="./nav.js?v=20261109q"></script>
-    <script src="./overview.js?v=20261109q"></script>
-    <script src="./home.js?v=20261109q"></script>
+    <script src="./budget-core.js?v=20261109u"></script>
+    <script src="./script.js?v=20261109u"></script>
+    <script src="./receipt-core.js?v=20261109u"></script>
+    <script src="./receipts.js?v=20261109u"></script>
+    <script src="./nav.js?v=20261109u"></script>
+    <script src="./overview.js?v=20261109u"></script>
+    <script src="./journey-core.js?v=20261109u"></script>
+    <script src="./journeys.js?v=20261109u"></script>
+    <script src="./home.js?v=20261109u"></script>
   </body>
 </html>
