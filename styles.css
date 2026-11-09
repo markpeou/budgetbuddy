@@ -2302,9 +2302,52 @@ td .money-input-wrap {
   .card-split { order: 5; }
   .card-receipts { order: 6; }
 
-  /* The money strip replaces the big header on phones. */
+  /* Phones: a slim brand row that scrolls away; the money strip pins below it. */
   .app-header {
+    order: -11;
+    display: flex;
+    align-items: center;
+    margin: 0 -12px;
+    padding: 10px 16px 8px;
+    border: 0;
+    border-radius: 0;
+    box-shadow: none;
+    background: transparent;
+    overflow: visible;
+  }
+  .app-header::before {
     display: none;
+  }
+  .app-header-title {
+    gap: 8px;
+    margin: 0;
+  }
+  .app-header-title .icon-chip {
+    width: 28px;
+    height: 28px;
+    border-radius: 8px;
+  }
+  .app-header-title .icon-chip .icon {
+    width: 16px;
+    height: 16px;
+  }
+  .app-header h1 {
+    font-size: 18px;
+    letter-spacing: -0.02em;
+    background: var(--gradient-brand);
+    -webkit-background-clip: text;
+    background-clip: text;
+    color: transparent;
+  }
+  .app-header .subtitle {
+    display: none;
+  }
+  /* Strip sits under the brand row now, and carries a thin brand edge when pinned. */
+  .money-strip {
+    margin-top: 0;
+    background:
+      var(--gradient-brand) top / 100% 3px no-repeat,
+      rgba(255, 255, 255, 0.94);
   }
 
   /* Was flex-basis 200px, which became 200px of height in the column layout. */

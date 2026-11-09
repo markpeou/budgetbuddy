@@ -540,7 +540,7 @@ function updateCurrencyHeaders() {
     if (!currenciesDiffer()) {
       incomeHintEl.textContent = `Enter your pay in ${incomeMeta.name} (${incomeCode}). Each expense can use its own currency.`;
     } else if (isAutoReporting()) {
-      incomeHintEl.textContent = `Enter your pay in ${incomeMeta.name} (${incomeCode}). Totals show in ${reportingMeta.name} (${reportingCode}), where most of your expenses are.`;
+      incomeHintEl.textContent = `Enter your pay in ${incomeMeta.name} (${incomeCode}). Totals show in ${reportingMeta.name} (${reportingCode}), ${autoReporting.share > 0 ? 'where most of your expenses are' : 'the currency where you are'}.`;
     } else {
       incomeHintEl.textContent = `Enter your pay in ${incomeMeta.name} (${incomeCode}). Totals show in ${reportingMeta.name} (${reportingCode}).`;
     }
