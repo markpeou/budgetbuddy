@@ -99,3 +99,14 @@ One result layout everywhere, explanations, mobile and accessibility review, edg
 - Migrations: the calculators' old savings figure moves into the budget; old scenarios load unchanged.
 
 Not done in Phase 1 (moved to Phase 2): debt type on costs (debt is counted once as a cost today and suggested as essential); naming the missing currency inside the planner's own tables.
+
+## 9. Phase 2 status: done
+
+- **Understand my money** replaces Spending breakdown, Savings capacity and Money snapshot (old links redirect). Answer, a monthly/yearly table (money coming in with take-home/other, money going out split into costs you must pay and other spending, money left over), what this means, your costs ranked with "Must pay" tags, and a next step. Five question presets (where it goes, cost of living, a year's saving, income needed, full picture).
+- **Emergency fund:** 3, 6, 9 and 12 months side by side, nothing preselected; "what you've set aside covers about N months"; optional target date gives the monthly amount; "no single right amount" note.
+- **Savings goal:** three ways to ask (how long / how much to save / how much I'll have), weekly/fortnightly/monthly saving, optional yearly interest (off unless entered). Handles already reached, no saving, more than 100 years, and a monthly amount above money left over.
+- **Plain language:** calculator names, field labels, job-loss and time-off wording ("Keep spending as I do today" / "Spend only on what I need", "About 3½ months"), "What this means" and "Next step" on the new pages.
+- **Planner** names the currency it can't convert.
+- **Tests:** 9 more (emergency 9 months and target date, goal time/contribution/projection with frequency, interest and edge cases). 113 in total.
+
+Still to decide or do: debt type on costs (kept out because the cost groups stay as they are; debt is counted once as a cost and suggested as a must-pay cost by its name). Phase 3: time off with one-off costs and 3/6/12 side by side, moving, income change with start date and goal impact, scenario comparison. Phase 4: the same result layout on the remaining pages (planner Summary, time off, income change), accessibility review.

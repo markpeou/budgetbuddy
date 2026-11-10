@@ -606,6 +606,14 @@ function updateRateHints() {
       ratesMetaEl.textContent = describeRates();
     }
     ratesMetaEl.classList.toggle('rates-meta--stale', Boolean(vndRatesCache) && ratesAgeInfo().stale);
+    // Name the currency we can't convert, so "—" in the tables makes sense.
+    if (!ratesLoading && typeof getBudgetModel === 'function') {
+      const m = getBudgetModel();
+      if (m && !m.ok && m.missingRates.length) {
+        ratesMetaEl.textContent = `Can’t convert ${m.missingRates.join(', ')} to ${m.currency} yet, so some totals show “—”. ${vndRatesCache ? describeRates() : 'Check your connection.'}`;
+        ratesMetaEl.classList.add('rates-meta--stale');
+      }
+    }
   }
 
   if (expenseRateHintEl) {

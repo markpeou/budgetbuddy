@@ -101,15 +101,21 @@
   // ---------------------------------------------------------------------------
 
   /** Targets for each cover option, and progress toward the chosen one. */
-  function emergencyFund({ essentials, months, saved, monthly, options = [3, 6, 12] }) {
+  /**
+   * Targets for each cover option, how many months current savings cover, and
+   * (once a cover is chosen) the gap, time to build it, or — with a target
+   * date — what to save each month. No option is treated as "right".
+   */
+  function emergencyFund({ essentials, months, saved, monthly, deadline, options = [3, 6, 9, 12], today = new Date() }) {
     const ess = num(essentials);
     const have = num(saved);
     const per = num(monthly);
     const targets = options.map((m) => ({ months: m, target: ess * m }));
-    if (!months) return { targets, chosen: null };
+    const monthsCoveredNow = ess ? have / ess : null;
+    if (!months) return { targets, chosen: null, saved: have, monthsCoveredNow };
     const target = ess * months;
     const gap = Math.max(0, target - have);
-    return {
+    const out = {
       targets,
       chosen: months,
       target,
@@ -117,8 +123,91 @@
       gap,
       covered: gap === 0 && target > 0,
       monthsToBuild: gap > 0 && per > 0 ? Math.ceil(gap / per) : gap === 0 ? 0 : null,
-      monthsCoveredNow: ess ? have / ess : null,
+      monthsCoveredNow,
     };
+    const until = monthsUntil(deadline, today);
+    if (until && gap > 0) {
+      out.deadlineMonths = until;
+      out.requiredMonthly = gap / until;
+      out.onTrack = per > 0 && per >= out.requiredMonthly - 0.005;
+    }
+    return out;
+  }
+
+  // ---------------------------------------------------------------------------
+  // Savings goals: three ways to ask, optional interest, any saving frequency
+  // ---------------------------------------------------------------------------
+
+  const PER_MONTH = { weekly: 52 / 12, fortnightly: 26 / 12, monthly: 1 };
+  const GOAL_MAX_MONTHS = 1200; // 100 years: beyond this, "not reachable"
+
+  /** A weekly/fortnightly/monthly amount as a monthly amount. */
+  function monthlyEquivalent(amount, frequency = 'monthly') {
+    return num(amount) * (PER_MONTH[frequency] || 1);
+  }
+
+  /** Optional interest: a yearly % paid monthly on the balance. 0 = none. */
+  const monthlyRate = (annualRate) => Math.max(0, Number(annualRate) || 0) / 100 / 12;
+
+  /** Balance after `months` of saving (interest added monthly, then the saving). */
+  function growBalance(start, monthly, months, annualRate = 0) {
+    const r = monthlyRate(annualRate);
+    let b = num(start);
+    for (let i = 0; i < months; i++) b = b * (1 + r) + monthly;
+    return b;
+  }
+
+  /** 1. "I have a target. How long will it take?" */
+  function goalTime({ target, saved = 0, contribution = 0, frequency = 'monthly', annualRate = 0, today = new Date() }) {
+    const tgt = num(target);
+    const have = num(saved);
+    const per = monthlyEquivalent(contribution, frequency);
+    const r = monthlyRate(annualRate);
+    if (!tgt) return { status: 'invalid' };
+    if (have >= tgt) return { status: 'reached', target: tgt, saved: have, gap: 0, months: 0 };
+    if (per <= 0 && (r === 0 || have === 0)) return { status: 'no-saving', target: tgt, saved: have, gap: tgt - have };
+    let b = have;
+    let m = 0;
+    while (b < tgt - 0.005 && m < GOAL_MAX_MONTHS) {
+      b = b * (1 + r) + per;
+      m++;
+    }
+    if (b < tgt - 0.005) return { status: 'too-long', target: tgt, saved: have, gap: tgt - have, monthly: per };
+    return { status: 'ok', target: tgt, saved: have, gap: tgt - have, monthly: per, months: m, reachDate: addMonths(m, today), interest: Math.max(0, b - have - per * m) };
+  }
+
+  /** 2. "I have a target date. How much should I save?" */
+  function goalContribution({ target, saved = 0, deadline, frequency = 'monthly', annualRate = 0, today = new Date() }) {
+    const tgt = num(target);
+    const have = num(saved);
+    if (!tgt) return { status: 'invalid' };
+    const n = monthsUntil(deadline, today);
+    if (!n) return { status: 'no-date', target: tgt, saved: have };
+    const r = monthlyRate(annualRate);
+    const grown = have * Math.pow(1 + r, n);
+    if (grown >= tgt) return { status: 'reached', target: tgt, saved: have, months: n, gap: 0 };
+    const monthly = r === 0 ? (tgt - have) / n : ((tgt - grown) * r) / (Math.pow(1 + r, n) - 1);
+    return {
+      status: 'ok',
+      target: tgt,
+      saved: have,
+      months: n,
+      gap: tgt - have,
+      monthly,
+      perPeriod: monthly / (PER_MONTH[frequency] || 1),
+      frequency,
+    };
+  }
+
+  /** 3. "I can save this much. How much will I have?" */
+  function goalProjection({ saved = 0, contribution = 0, frequency = 'monthly', deadline, months, annualRate = 0, today = new Date() }) {
+    const n = months != null ? Math.max(0, Math.round(num(months))) : monthsUntil(deadline, today);
+    if (!n) return { status: 'no-date' };
+    const per = monthlyEquivalent(contribution, frequency);
+    const have = num(saved);
+    const balance = growBalance(have, per, n, annualRate);
+    const contributed = per * n;
+    return { status: 'ok', months: n, saved: have, monthly: per, contributed, interest: Math.max(0, balance - have - contributed), balance };
   }
 
   /**
@@ -384,6 +473,7 @@
 
   return {
     breakScenario, ratesAge, STALE_RATE_DAYS,
+    goalTime, goalContribution, goalProjection, monthlyEquivalent, growBalance,
     breakdown, capacity, snapshot, emergencyFund, runway, savingsGoal, incomeChange, monthsUntil, addMonths, dateAfter,
     suggestEssential, essentialKey, essentials, availableFunds, runwayScenario, sumInCurrency, MAX_MONTHS,
   };

@@ -42,7 +42,7 @@ ok('snapshot: neutral readings, runway only with savings', () => {
 
 ok('emergency fund: three targets, nothing chosen until the user picks', () => {
   const none = J.emergencyFund({ essentials: 12000000, saved: 20000000, monthly: 5000000 });
-  assert.deepStrictEqual(none.targets.map((t) => t.target), [36000000, 72000000, 144000000]);
+  assert.deepStrictEqual(none.targets.map((t) => t.target), [36000000, 72000000, 108000000, 144000000]); // 3, 6, 9, 12 months
   assert.strictEqual(none.chosen, null);
   const six = J.emergencyFund({ essentials: 12000000, months: 6, saved: 20000000, monthly: 5000000 });
   assert.strictEqual(six.gap, 52000000);
@@ -364,4 +364,83 @@ ok('rates age: fresh, stale after 3 days, unknown treated as stale', () => {
   assert.strictEqual(J.ratesAge('2026-11-07T07:59:00Z', now).stale, false); // 3 days
   assert.deepStrictEqual(J.ratesAge('2026-10-29T08:00:00Z', now), { known: true, days: 12, stale: true });
   assert.strictEqual(J.ratesAge(null, now).stale, true);
+});
+
+// ---------------------------------------------------------------------------
+// Phase 2: emergency fund target date; savings goals three ways
+// ---------------------------------------------------------------------------
+console.log('emergency fund and savings goals');
+const T2 = new Date(2026, 10, 10);
+
+ok('emergency fund: 3, 6, 9 and 12 months; months covered today', () => {
+  const e = J.emergencyFund({ essentials: 2000, saved: 5000 });
+  assert.deepStrictEqual(e.targets.map((t) => t.months), [3, 6, 9, 12]);
+  assert.strictEqual(e.monthsCoveredNow, 2.5);
+  assert.strictEqual(e.chosen, null);
+});
+
+ok('emergency fund: target date gives what to save each month', () => {
+  const e = J.emergencyFund({ essentials: 2000, months: 6, saved: 5000, monthly: 500, deadline: '2027-11', today: T2 });
+  assert.strictEqual(e.gap, 7000);
+  assert.strictEqual(e.deadlineMonths, 12);
+  assert.ok(Math.abs(e.requiredMonthly - 583.33) < 0.01);
+  assert.strictEqual(e.onTrack, false);
+  assert.strictEqual(J.emergencyFund({ essentials: 2000, months: 6, saved: 5000, monthly: 600, deadline: '2027-11', today: T2 }).onTrack, true);
+});
+
+ok('goal time: simple, no interest', () => {
+  const g = J.goalTime({ target: 10000, saved: 1000, contribution: 500, today: T2 });
+  assert.strictEqual(g.status, 'ok');
+  assert.strictEqual(g.months, 18);
+  assert.strictEqual(g.reachDate.getFullYear(), 2028);
+  assert.strictEqual(g.reachDate.getMonth(), 4); // May 2028
+});
+
+ok('goal time: weekly and fortnightly saving', () => {
+  assert.strictEqual(J.goalTime({ target: 5200, contribution: 100, frequency: 'weekly', today: T2 }).months, 12); // 433.33 a month
+  assert.strictEqual(J.goalTime({ target: 2600, contribution: 100, frequency: 'fortnightly', today: T2 }).months, 12);
+});
+
+ok('goal time: optional interest shortens it, and is reported', () => {
+  const plain = J.goalTime({ target: 20000, saved: 0, contribution: 500, today: T2 });
+  const withRate = J.goalTime({ target: 20000, saved: 0, contribution: 500, annualRate: 5, today: T2 });
+  assert.strictEqual(plain.months, 40);
+  assert.ok(withRate.months < plain.months);
+  assert.ok(withRate.interest > 0);
+});
+
+ok('goal time: already reached, no saving, and out of reach', () => {
+  assert.strictEqual(J.goalTime({ target: 1000, saved: 1500 }).status, 'reached');
+  assert.strictEqual(J.goalTime({ target: 1000, saved: 0, contribution: 0 }).status, 'no-saving');
+  assert.strictEqual(J.goalTime({ target: 1e9, saved: 0, contribution: 1 }).status, 'too-long');
+  assert.strictEqual(J.goalTime({ target: 0 }).status, 'invalid');
+});
+
+ok('goal contribution: what to save by a date, with and without interest', () => {
+  const plain = J.goalContribution({ target: 10000, saved: 0, deadline: '2028-11', today: T2 });
+  assert.strictEqual(plain.months, 24);
+  assert.ok(Math.abs(plain.monthly - 416.67) < 0.01);
+  const r = 0.05 / 12;
+  const expected = (10000 * r) / (Math.pow(1 + r, 24) - 1);
+  const withRate = J.goalContribution({ target: 10000, saved: 0, deadline: '2028-11', annualRate: 5, today: T2 });
+  assert.ok(Math.abs(withRate.monthly - expected) < 0.01);
+  const weekly = J.goalContribution({ target: 10000, saved: 0, deadline: '2028-11', frequency: 'weekly', today: T2 });
+  assert.ok(Math.abs(weekly.perPeriod - 416.67 / (52 / 12)) < 0.01);
+});
+
+ok('goal contribution: already enough, and no date', () => {
+  assert.strictEqual(J.goalContribution({ target: 1000, saved: 1000, deadline: '2027-06', today: T2 }).status, 'reached');
+  assert.strictEqual(J.goalContribution({ target: 1000, saved: 0, today: T2 }).status, 'no-date');
+});
+
+ok('goal projection: how much you will have', () => {
+  const p = J.goalProjection({ saved: 1000, contribution: 100, months: 12 });
+  assert.strictEqual(p.balance, 2200);
+  assert.strictEqual(p.interest, 0);
+  const r = 0.05 / 12;
+  const withRate = J.goalProjection({ saved: 0, contribution: 100, months: 12, annualRate: 5 });
+  assert.ok(Math.abs(withRate.balance - 100 * ((Math.pow(1 + r, 12) - 1) / r)) < 0.01); // 1,227.89
+  assert.strictEqual(J.goalProjection({ saved: 0, contribution: 100 }).status, 'no-date');
+  const json = JSON.stringify([J.goalTime({ target: 5, contribution: NaN }), J.goalProjection({ months: 'x' })]);
+  assert.ok(!/NaN|Infinity/.test(json));
 });

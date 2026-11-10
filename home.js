@@ -25,14 +25,12 @@
   // ---------------------------------------------------------------------------
 
   const CALCULATORS = [
-    { to: 'go/income', name: 'Budget planner', icon: 'wallet', answer: 'Income, costs and savings in any currency. Feeds every calculator.' },
-    { to: 'tool/breakdown', name: 'Spending breakdown', icon: 'chart-pie', answer: 'Your costs ranked, fixed vs flexible.' },
-    { to: 'tool/capacity', name: 'Savings capacity', icon: 'coins', answer: 'What’s left to save each month and year.' },
-    { to: 'tool/snapshot', name: 'Money snapshot', icon: 'activity', answer: 'Your finances at a glance.' },
-    { to: 'tool/emergency', name: 'Emergency fund', icon: 'life-buoy', answer: 'Your target, and when you’ll reach it.' },
-    { to: 'tool/runway', name: 'Financial runway', icon: 'hourglass', answer: 'How long your savings would last.' },
-    { to: 'tool/goal', name: 'Savings goal', icon: 'target', answer: 'When you’ll get there, or what it takes.' },
-    { to: 'tool/income', name: 'Income change', icon: 'trending-down', answer: 'What a pay cut or career switch means.' },
+    { to: 'go/income', name: 'Budget planner', icon: 'wallet', answer: 'Money in, money out and savings, in any currency. Feeds every calculator.' },
+    { to: 'tool/understand', name: 'Understand my money', icon: 'chart-pie', answer: 'Where it goes, and how much is left over.' },
+    { to: 'tool/emergency', name: 'Emergency fund', icon: 'life-buoy', answer: 'How much to keep for emergencies.' },
+    { to: 'tool/goal', name: 'Savings goal', icon: 'target', answer: 'How long it takes, or how much to save.' },
+    { to: 'tool/runway', name: 'How long your savings will last', icon: 'hourglass', answer: 'If your money coming in stopped.' },
+    { to: 'tool/income', name: 'Change in income', icon: 'trending-down', answer: 'What happens if you earn more or less.' },
   ];
 
   // Opening the budget planner directly, with guidance.
@@ -46,9 +44,9 @@
       icon: 'compass',
       desc: 'What comes in, goes out and is left.',
       items: [
-        { q: 'Where does my money go each month?', d: 'Your costs ranked, and which you can change.', to: 'tool/breakdown' },
-        { q: 'How much can I realistically save?', d: 'What’s really left after every cost.', to: 'tool/capacity' },
-        { q: 'What does my financial situation look like?', d: 'Savings rate, fixed costs and runway.', to: 'tool/snapshot' },
+        { q: 'Where does my money go each month?', d: 'Money in, money out, and what’s left.', to: 'tool/understand' },
+        { q: 'How much can I realistically save?', d: 'What’s left after every cost, each month and year.', to: 'tool/understand/year' },
+        { q: 'What does my financial situation look like?', d: 'The full picture in one place.', to: 'tool/understand/snapshot' },
       ],
     },
     {
@@ -56,9 +54,9 @@
       icon: 'shield',
       desc: 'A buffer that fits your life.',
       items: [
-        { q: 'How much should I have in an emergency fund?', d: 'A target, and when you’ll reach it.', to: 'tool/emergency' },
+        { q: 'How much money should I keep for emergencies?', d: 'A target, and when you’ll reach it.', to: 'tool/emergency' },
         { q: 'How long could I manage without an income?', d: 'How many months your savings cover.', to: 'tool/runway' },
-        { q: 'How can I reach my savings goal?', d: 'When you’ll get there.', to: 'tool/goal' },
+        { q: 'How long will it take me to save for something?', d: 'Or how much to save by a date.', to: 'tool/goal' },
       ],
     },
     {
@@ -75,12 +73,12 @@
   ];
 
   const QUESTIONS = [
-    { q: 'How much does it really cost to live each month?', to: 'tool/breakdown/living' },
+    { q: 'How much does it really cost to live each month?', to: 'tool/understand/living' },
     { q: 'How much should I save before leaving my job?', to: 'tool/runway/leave' },
-    { q: 'How much can I save over the next year?', to: 'tool/capacity/year' },
-    { q: 'How much do I need in an emergency fund?', to: 'tool/emergency' },
+    { q: 'How much can I save over the next year?', to: 'tool/understand/year' },
+    { q: 'How much do I need for emergencies?', to: 'tool/emergency' },
     { q: 'Could I afford to work less?', to: 'tool/income/less' },
-    { q: 'How much income do I need to cover my expenses?', to: 'tool/capacity/needed' },
+    { q: 'How much do I need to earn to cover my costs?', to: 'tool/understand/needed' },
   ];
 
   /** Icon (from the sprite) inside a span, decorative. */

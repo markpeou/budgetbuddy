@@ -12,8 +12,8 @@
       href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700&display=swap"
       rel="stylesheet"
     />
-    <link rel="stylesheet" href="./styles.css?v=20261110k" />
-    <link rel="stylesheet" href="./home.css?v=20261110k" />
+    <link rel="stylesheet" href="./styles.css?v=20261110o" />
+    <link rel="stylesheet" href="./home.css?v=20261110o" />
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
   </head>
   <body data-view="home">
@@ -283,6 +283,11 @@
         <div class="tool-scenarios" id="toolScenarios" aria-live="polite" hidden></div>
         <ul class="tool-notes tool-scenario-notes" id="toolScenarioNotes" hidden></ul>
 
+        <section class="tool-meaning" id="toolMeaningWrap" aria-labelledby="toolMeaningTitle" hidden>
+          <h2 id="toolMeaningTitle">What this means</h2>
+          <ul id="toolMeaning"></ul>
+        </section>
+
         <div class="tool-columns" id="toolColumns">
           <section class="tool-section" id="toolAdjust" aria-labelledby="toolAdjustTitle">
             <h2 id="toolAdjustTitle">Change the numbers</h2>
@@ -291,12 +296,20 @@
 
           <section class="tool-section" id="toolBehind" aria-labelledby="toolBehindTitle">
             <h2 id="toolBehindTitle">Behind the answer</h2>
+            <table class="tool-table" id="toolTable" hidden></table>
             <dl class="tool-figures" id="toolFigures"></dl>
+            <h3 class="tool-list-title" id="toolListTitle" hidden></h3>
             <ol class="tool-rank-list" id="toolRankList"></ol>
             <ul class="tool-notes" id="toolNotes"></ul>
             <p class="tool-footnote" id="toolFootnote" hidden></p>
           </section>
         </div>
+
+        <a class="tool-next" id="toolNext" href="#journeys" hidden>
+          <span class="tool-next-label">Next step</span>
+          <span class="tool-next-text" id="toolNextText"></span>
+          <span aria-hidden="true">→</span>
+        </a>
 
         <p class="tool-source" id="toolSource">
           Monthly figures in <span id="toolSourceCode"></span>. <a href="#go/income" id="toolEditBudget">Edit your budget →</a>
@@ -1046,14 +1059,14 @@
     </nav>
 
     <script src="./icons.js"></script>
-    <script src="./budget-core.js?v=20261110k"></script>
-    <script src="./journey-core.js?v=20261110k"></script>
-    <script src="./script.js?v=20261110k"></script>
-    <script src="./receipt-core.js?v=20261110k"></script>
-    <script src="./receipts.js?v=20261110k"></script>
-    <script src="./nav.js?v=20261110k"></script>
-    <script src="./overview.js?v=20261110k"></script>
-    <script src="./journeys.js?v=20261110k"></script>
-    <script src="./home.js?v=20261110k"></script>
+    <script src="./budget-core.js?v=20261110o"></script>
+    <script src="./journey-core.js?v=20261110o"></script>
+    <script src="./script.js?v=20261110o"></script>
+    <script src="./receipt-core.js?v=20261110o"></script>
+    <script src="./receipts.js?v=20261110o"></script>
+    <script src="./nav.js?v=20261110o"></script>
+    <script src="./overview.js?v=20261110o"></script>
+    <script src="./journeys.js?v=20261110o"></script>
+    <script src="./home.js?v=20261110o"></script>
   </body>
 </html>

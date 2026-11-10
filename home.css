@@ -1899,3 +1899,195 @@ body:not([data-view='app']) {
   font-weight: 600;
   line-height: 1.45;
 }
+
+/* ------------------------------------------------------------------ */
+/* Phase 2: worked-out table, what this means, next step               */
+/* ------------------------------------------------------------------ */
+
+.tool-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 15px;
+  font-variant-numeric: tabular-nums;
+}
+
+.tool-table[hidden],
+.tool-meaning[hidden],
+.tool-next[hidden],
+.tool-list-title[hidden] {
+  display: none;
+}
+
+.tool-table th,
+.tool-table td {
+  padding: 9px 0;
+  border-top: 1px solid var(--color-line);
+  text-align: left;
+  font-weight: 500;
+}
+
+.tool-table thead th {
+  border-top: 0;
+  padding-top: 0;
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+.tool-table .num {
+  padding-left: 12px;
+  text-align: right;
+  white-space: nowrap;
+}
+
+.tool-table tbody th {
+  color: var(--text);
+}
+
+.tool-table tr.is-total th,
+.tool-table tr.is-total td {
+  font-weight: 700;
+}
+
+.tool-table tr.is-sub th,
+.tool-table tr.is-sub td {
+  border-top-style: dashed;
+  color: var(--muted);
+  font-size: 14px;
+}
+
+.tool-table tr.is-sub th {
+  padding-left: 14px;
+}
+
+.tool-table tr.is-result th,
+.tool-table tr.is-result td {
+  border-top: 2px solid var(--text);
+  font-weight: 700;
+  font-size: 16px;
+}
+
+.tool-list-title {
+  margin: 22px 0 0;
+  font-size: 14px;
+  font-weight: 700;
+}
+
+.tool-rank-tag {
+  margin-left: 8px;
+  padding: 1px 7px;
+  border-radius: 999px;
+  background: var(--color-brand-tint);
+  color: var(--color-brand-primary);
+  font-size: 11px;
+  font-weight: 600;
+  vertical-align: 1px;
+}
+
+.tool-meaning {
+  margin-top: 16px;
+  padding: 18px 20px;
+  border-radius: 16px;
+  border: 1px solid var(--color-line);
+  background: var(--color-bg-surface);
+}
+
+.tool-meaning h2 {
+  margin: 0 0 8px;
+  font-size: 15px;
+  font-weight: 700;
+}
+
+.tool-meaning ul {
+  margin: 0;
+  padding-left: 18px;
+}
+
+.tool-meaning li {
+  color: var(--text);
+  font-size: 15px;
+  line-height: 1.55;
+}
+
+.tool-meaning li + li {
+  margin-top: 4px;
+}
+
+.tool-next {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-top: 16px;
+  padding: 16px 20px;
+  border-radius: 16px;
+  background: var(--color-brand-tint);
+  border: 1px solid var(--color-brand-tint-border);
+  color: var(--text);
+  text-decoration: none;
+  font-weight: 600;
+  transition: border-color 0.12s ease;
+}
+
+.tool-next:hover {
+  border-color: #cdb6f8;
+}
+
+.tool-next:focus-visible {
+  outline: none;
+  box-shadow: var(--focus-ring);
+}
+
+.tool-next-label {
+  color: var(--color-brand-primary);
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+
+.tool-next-text {
+  flex: 1 1 auto;
+}
+
+/* Four cover options wrap neatly; goal modes read as words */
+.tool-targets {
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+}
+
+.tool-choice--wrap {
+  flex-wrap: wrap;
+}
+
+.percent-input-wrap {
+  position: relative;
+}
+
+.percent-input-wrap .cell-input {
+  padding-right: 32px;
+}
+
+.percent-suffix {
+  position: absolute;
+  right: 12px;
+  top: 50%;
+  transform: translateY(-50%);
+  color: var(--muted);
+  font-weight: 600;
+}
+
+@media (max-width: 900px) {
+  .tool-next {
+    flex-wrap: wrap;
+    gap: 2px 10px;
+  }
+
+  .tool-next-label {
+    flex-basis: 100%;
+  }
+
+  .tool-meaning {
+    padding: 16px;
+  }
+}
