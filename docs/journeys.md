@@ -10,9 +10,9 @@ Calculators fill in from the budget planner when there is one, and every figure 
 
 ## Decisions
 
-- **Essentials are suggested, then confirmed.** (Updated: was "fixed costs only", which undercounted groceries, transport and utilities.) The list starts from the budget: fixed costs and variable costs whose names suggest necessities, each marked *Suggested*. Users tick, untick, edit amounts, add missing costs, or confirm the lot. Runway and emergency fund share the list.
+- **Essentials are suggested, then confirmed.** (Updated: was "fixed costs only", which undercounted groceries, transport and utilities.) The list starts from the budget: fixed costs and variable costs whose names suggest necessities, each marked *Suggested*. Users tick, untick, edit amounts, add missing costs, or confirm the lot. Runway and emergency fund share the list, and **each scenario keeps its own essentials** (saved with the budget, so changing them prompts "You've changed …").
 - **Money by certainty.** Available now + confirmed money count; uncertain or estimated money is excluded unless the user includes it, and its effect is shown either way. No redundancy or benefit entitlements are calculated.
-- **Never guess a conversion.** A missing exchange rate puts the affected answer on hold and names the currency. The last good rates are cached and labelled as a saved copy.
+- **Never guess a conversion.** A missing exchange rate puts the affected answer on hold and names the currency. The last good rates are cached and labelled as a saved copy. Rates older than 3 days (live or saved) show an amber warning wherever converted amounts are used.
 - **Emergency fund cover is the user's choice.** Targets for 3, 6 and 12 months show side by side; nothing is preselected.
 - **Savings balance is one figure**, entered once and shared by every calculator. Savings in several countries is a backlog item.
 - **Neutral readings.** No "good" or "bad" verdicts on someone's finances; show the figure and what moves it.
@@ -55,8 +55,8 @@ Answer: "You'll reach ₫50M by March 2028." With a deadline: "To get there by D
 
 ### Plan a big life change
 
-**Could I afford to take six months off?** — *Yes or no, and by how much.*
-Answer: "Yes — six months off costs ₫90M and you have ₫120M, leaving ₫30M." Or: "Not yet — you're ₫40M short, about 5 months of saving at your current rate." Levers: length (3/6/12 months), costs while away, income during the break.
+**Could I afford to take six months off?** / **How much should I save before leaving my job?** — *Yes or no, and by how much.*
+Same two scenarios as job loss (current spending / essentials only), same money split (available now + confirmed; uncertain opt-in) and reliable income. Length is 3, 6 or 12 months (the title follows). Each scenario shows the cost of the break, what's left or how much short, and how long the gap would take to save at the current saving rate (income − spending from the budget). The leaving-a-job version leads with the amount needed.
 
 **What happens if my income decreases?** — *Would I still be okay?*
 Answer: "On ₫20M you'd have ₫2.1M left a month instead of ₫8.4M — ₫75M less a year." If negative: "You'd be ₫3M short each month; your savings cover that for 13 months." Lever: new income, as an amount or a % drop.

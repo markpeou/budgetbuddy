@@ -352,7 +352,53 @@
     return missing.length ? { ok: false, total: null, missing } : { ok: true, total, missing };
   }
 
+  // ---------------------------------------------------------------------------
+  // A fixed break (time off, leaving a job): can the funds cover N months?
+  // ---------------------------------------------------------------------------
+
+  /**
+   * @returns {{status:'invalid'|'covered-by-income'|'affordable'|'short', ...}}
+   *   capacity = what can be saved per month today (for "months to close the gap")
+   */
+  function breakScenario({ funds, expenses, income = 0, months, capacity = 0 }) {
+    const f = Number(funds);
+    const e = Number(expenses);
+    const i = Number(income) || 0;
+    const m = Number(months);
+    if (![f, e, i, m].every(Number.isFinite) || e < 0 || f < 0 || i < 0 || m <= 0) return { status: 'invalid' };
+    const burn = Math.round((e - i) * 100) / 100;
+    const base = { funds: f, expenses: e, income: i, burn, months: m };
+    if (burn <= 0) return { ...base, status: 'covered-by-income', cost: 0, leftAfter: f };
+    const cost = burn * m;
+    const left = f - cost;
+    if (left >= 0) return { ...base, status: 'affordable', cost, leftAfter: left };
+    const shortfall = -left;
+    const cap = Number(capacity);
+    return {
+      ...base,
+      status: 'short',
+      cost,
+      shortfall,
+      monthsToSave: Number.isFinite(cap) && cap > 0 ? Math.ceil(shortfall / cap) : null,
+    };
+  }
+
+  // ---------------------------------------------------------------------------
+  // How old are the exchange rates?
+  // ---------------------------------------------------------------------------
+
+  const STALE_RATE_DAYS = 3;
+
+  /** Age of a set of rates, and whether it's old enough to warn about. */
+  function ratesAge(fetchedAt, now = new Date()) {
+    const t = fetchedAt instanceof Date ? fetchedAt.getTime() : Date.parse(fetchedAt);
+    if (!Number.isFinite(t)) return { known: false, days: null, stale: true };
+    const days = Math.max(0, Math.floor((now.getTime() - t) / 86400000));
+    return { known: true, days, stale: days > STALE_RATE_DAYS };
+  }
+
   return {
+    breakScenario, ratesAge, STALE_RATE_DAYS,
     breakdown, capacity, snapshot, emergencyFund, runway, savingsGoal, incomeChange, monthsUntil, addMonths, dateAfter,
     suggestEssential, essentialKey, essentials, availableFunds, runwayScenario, sumInCurrency, MAX_MONTHS,
   };

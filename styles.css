@@ -2870,3 +2870,12 @@ body.sheet-open .tab-bar {
 .table-budget-split tbody td.status-cell:empty {
   display: none;
 }
+
+/* Exchange rates older than 3 days */
+.rates-meta--stale {
+  padding: 8px 10px;
+  border-radius: var(--radius-md);
+  background: #fffaeb;
+  color: #7a5b00;
+  font-weight: 600;
+}

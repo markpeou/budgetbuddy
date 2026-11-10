@@ -321,3 +321,47 @@ ok('currency: multiple expense currencies', () => {
   const partial = J.sumInCurrency([{ amount: 1000, currency: 'AUD' }, { amount: 5, currency: 'EUR' }, { amount: 5, currency: 'GBP' }], 'AUD', conv(RATES));
   assert.deepStrictEqual(partial.missing, ['EUR', 'GBP']);
 });
+
+// ---------------------------------------------------------------------------
+// Time off / leaving a job, and stale exchange rates
+// ---------------------------------------------------------------------------
+console.log('time off and rate age');
+
+ok('break: affordable, with what is left', () => {
+  const r = J.breakScenario({ funds: 25000, expenses: 3080, income: 0, months: 6 });
+  assert.strictEqual(r.status, 'affordable');
+  assert.strictEqual(r.cost, 18480);
+  assert.strictEqual(r.leftAfter, 6520);
+});
+
+ok('break: short, and months to close the gap at the current saving rate', () => {
+  const r = J.breakScenario({ funds: 10000, expenses: 3080, income: 0, months: 6, capacity: 2920 });
+  assert.strictEqual(r.status, 'short');
+  assert.strictEqual(r.shortfall, 8480);
+  assert.strictEqual(r.monthsToSave, 3); // 2.9 → 3
+  assert.strictEqual(J.breakScenario({ funds: 0, expenses: 3000, months: 3 }).monthsToSave, null); // no saving rate known
+});
+
+ok('break: income during the break covers spending', () => {
+  const r = J.breakScenario({ funds: 0, expenses: 2000, income: 2500, months: 6 });
+  assert.strictEqual(r.status, 'covered-by-income');
+  assert.strictEqual(r.cost, 0);
+});
+
+ok('break: partial income lowers the cost', () => {
+  assert.strictEqual(J.breakScenario({ funds: 0, expenses: 3000, income: 1000, months: 3 }).cost, 6000);
+});
+
+ok('break: invalid inputs never produce a number', () => {
+  for (const bad of [{ funds: NaN, expenses: 1, months: 6 }, { funds: 1, expenses: 1, months: 0 }, { funds: 1, expenses: undefined, months: 6 }]) {
+    assert.strictEqual(J.breakScenario(bad).status, 'invalid');
+  }
+});
+
+ok('rates age: fresh, stale after 3 days, unknown treated as stale', () => {
+  const now = new Date('2026-11-10T08:00:00Z');
+  assert.deepStrictEqual(J.ratesAge(new Date('2026-11-09T08:00:00Z'), now), { known: true, days: 1, stale: false });
+  assert.strictEqual(J.ratesAge('2026-11-07T07:59:00Z', now).stale, false); // 3 days
+  assert.deepStrictEqual(J.ratesAge('2026-10-29T08:00:00Z', now), { known: true, days: 12, stale: true });
+  assert.strictEqual(J.ratesAge(null, now).stale, true);
+});

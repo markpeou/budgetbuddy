@@ -1873,3 +1873,29 @@ body:not([data-view='app']) {
   overflow-wrap: anywhere;
   line-height: 1.35;
 }
+
+/* Old exchange rates: amber, hard to miss, not alarming */
+.tool-stale {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 6px 16px;
+  margin-bottom: 12px;
+  padding: 12px 16px;
+  border-radius: 12px;
+  border: 1px solid #f3dfa6;
+  background: #fffaeb;
+}
+
+.tool-stale[hidden] {
+  display: none;
+}
+
+.tool-stale p {
+  margin: 0;
+  color: #7a5b00;
+  font-size: 14px;
+  font-weight: 600;
+  line-height: 1.45;
+}

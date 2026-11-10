@@ -159,6 +159,22 @@ const LOCAL_CURRENCY = (() => {
 const AUTO_CURRENCY = 'auto';
 const DEFAULT_EXPENSE_CURRENCY = AUTO_CURRENCY;
 const RECEIPTS_STORAGE_KEY = 'budgetBuddyReceipts_v1';
+// Essential-cost choices (ticks, edited amounts, added costs) belong to the
+// budget, so each scenario keeps its own. The calculators read and write them
+// through window.BudgetEssentials.
+let scenarioEssentials = { items: {}, extras: [] };
+function cloneEssentials(e) {
+  const src = e && typeof e === 'object' ? e : {};
+  return JSON.parse(JSON.stringify({ items: src.items || {}, extras: src.extras || [] }));
+}
+window.BudgetEssentials = {
+  get: () => scenarioEssentials,
+  isEmpty: () => !Object.keys(scenarioEssentials.items).length && !scenarioEssentials.extras.length,
+  set: (e) => {
+    scenarioEssentials = cloneEssentials(e);
+  },
+  changed: () => scheduleDraftSave(),
+};
 // Working draft (autosaved budget) and the save prompt; see the bottom of this file.
 const DRAFT_STORAGE_KEY = 'budgetBuddyDraft_v1';
 const SAVE_PROMPT_DISMISS_KEY = 'budgetBuddySavePromptDismissed';
@@ -575,6 +591,7 @@ function updateRateHints() {
     } else {
       ratesMetaEl.textContent = describeRates();
     }
+    ratesMetaEl.classList.toggle('rates-meta--stale', Boolean(vndRatesCache) && ratesAgeInfo().stale);
   }
 
   if (expenseRateHintEl) {
@@ -611,7 +628,16 @@ function describeRates() {
   const when = ratesFetchedAt ? `, updated ${ratesFetchedAt.toLocaleString(undefined, { day: 'numeric', month: 'short', year: 'numeric', hour: 'numeric', minute: '2-digit' })}` : '';
   const from = ratesSource ? ` from ${ratesSource}` : '';
   const note = ratesCached ? (ratesLoading ? ' (saved copy, refreshing…)' : ' (saved copy — couldn’t refresh)') : '';
-  return `Rates${from}${when}${note}.`;
+  const age = ratesAgeInfo();
+  const warn = age.stale ? (age.known ? ` These are ${age.days} days old, so converted amounts may be off.` : ' Their age is unknown, so converted amounts may be off.') : '';
+  return `Rates${from}${when}${note}.${warn}`;
+}
+
+/** Same rule as the calculators: older than 3 days is worth a warning. */
+function ratesAgeInfo() {
+  return window.JourneyCore && window.JourneyCore.ratesAge
+    ? window.JourneyCore.ratesAge(ratesFetchedAt)
+    : { known: Boolean(ratesFetchedAt), days: null, stale: false };
 }
 
 function saveRatesCache() {
@@ -647,6 +673,7 @@ window.BudgetRates = () => ({
   source: ratesSource,
   fetchedAt: ratesFetchedAt,
   cached: ratesCached,
+  age: ratesAgeInfo(),
   text: describeRates(),
   retry: loadExchangeRates,
 });
@@ -1858,6 +1885,7 @@ function collectScenarioData() {
     variable: rowsFrom(variableExpensesBody),
     subs: rowsFrom(subscriptionsBody),
     splits: currentSplits.map((s) => ({ ...s })),
+    essentials: cloneEssentials(scenarioEssentials),
   };
 }
 
@@ -2023,6 +2051,8 @@ function deleteSelectedScenario() {
 function applyScenarioData(rawData) {
   const data = Core ? Core.migrateScenarioData(rawData) : rawData;
   if (!data) return;
+  // Each scenario has its own essentials; older scenarios start from suggestions.
+  scenarioEssentials = cloneEssentials(rawData && rawData.essentials);
 
   salaryAmountInput.value = data.salaryAmount ?? '';
   if (salaryAmountInput.formatAmountValue) salaryAmountInput.formatAmountValue();
@@ -2207,7 +2237,21 @@ function canonicalBudget(raw) {
     ec: d.expenseCurrency,
     rows: [rows(d.fixed), rows(d.variable), rows(d.subs)],
     splits: (d.splits || []).map((x) => [String(x.label || '').trim(), Number(x.percent) || 0]),
+    ess: canonicalEssentials(raw && raw.essentials),
   });
+}
+
+/** Essentials in a comparable form: only real choices, keys sorted. */
+function canonicalEssentials(e) {
+  const c = cloneEssentials(e);
+  const items = Object.keys(c.items)
+    .sort()
+    .map((k) => [k, c.items[k].on === undefined ? null : Boolean(c.items[k].on), c.items[k].amount ? Number(c.items[k].amount.v) : null])
+    .filter(([, on, amt]) => on !== null || amt !== null);
+  const extras = c.extras
+    .map((x) => [String(x.name || '').trim(), x.amount ? Number(x.amount.v) : 0])
+    .filter(([n, a]) => n || a);
+  return [items, extras];
 }
 
 function selectedScenario() {
