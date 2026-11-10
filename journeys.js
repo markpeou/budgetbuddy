@@ -55,10 +55,21 @@
     return (lastBudget && lastBudget.incomeCode) || (typeof getIncomeCurrency === 'function' ? getIncomeCurrency() : 'USD');
   }
 
+  // Currencies that couldn't be converted while working out the current
+  // answer. Never fall back to the unconverted number: 1,000 VND is not
+  // 1,000 AUD. An answer that touched a missing rate is put on hold instead.
+  let missingRates = new Set();
+  let convertedSomething = false;
+
   function toCode(amount, from) {
-    if (!from || from === code()) return amount;
+    if (!from || from === code() || !Number(amount)) return amount;
     const v = typeof convert === 'function' ? convert(amount, from, code()) : NaN;
-    return Number.isFinite(v) ? v : amount;
+    if (!Number.isFinite(v)) {
+      missingRates.add(from);
+      return NaN;
+    }
+    convertedSomething = true;
+    return v;
   }
 
   /** Planner expense rows as monthly amounts in the income currency. */
@@ -77,8 +88,9 @@
         const amt = parseAmount((tr.querySelector('.expense-amount-input') || {}).value || '');
         const freq = (tr.querySelector('.expense-freq-select') || {}).value || 'monthly';
         const cur = (tr.querySelector('.expense-currency-select') || {}).value || code();
-        const monthly = toCode(frequencyToMonthly(amt, freq), cur);
-        if (monthly > 0) out.push({ name, monthly, kind });
+        if (!(amt > 0)) return;
+        // NaN when the rate is missing: kept, so it can't silently drop out.
+        out.push({ name, monthly: toCode(frequencyToMonthly(amt, freq), cur), kind, currency: cur });
       });
     });
     return out;
@@ -93,10 +105,14 @@
   function budget() {
     const b = lastBudget || {};
     const n = (x) => (Number.isFinite(x) ? x : 0);
-    const fixed = n(b.fixed);
-    const expenses = fixed + n(b.variable) + n(b.subs);
+    // The planner couldn't convert some costs: totals are unknown, not zero.
+    const ok = b.expensesOk !== false;
+    if (!ok) budgetRows(); // records which currencies are missing
+    const m = (x) => (ok ? n(x) : NaN);
+    const fixed = m(b.fixed);
+    const expenses = fixed + m(b.variable) + m(b.subs);
     return {
-      has: n(b.income) > 0 || expenses > 0,
+      has: n(b.income) > 0 || !ok || expenses > 0,
       income: n(b.income),
       fixed,
       expenses,
@@ -107,6 +123,34 @@
   }
 
   // ---------------------------------------------------------------------------
+  // Essential costs: suggested from the budget (fixed costs and necessities
+  // such as groceries or transport), confirmed and edited by the user.
+  // Shared by the runway and emergency fund calculators.
+  // ---------------------------------------------------------------------------
+
+  function essStore() {
+    store.essentials = store.essentials || { items: {}, extras: [] };
+    store.essentials.items = store.essentials.items || {};
+    store.essentials.extras = store.essentials.extras || [];
+    return store.essentials;
+  }
+
+  function essentialsList() {
+    const saved = essStore();
+    const items = {};
+    Object.entries(saved.items).forEach(([k, c]) => {
+      items[k] = { on: c.on, amount: c.amount ? toCode(c.amount.v, c.amount.c) : undefined };
+    });
+    const extras = saved.extras.map((x) => ({ id: x.id, name: x.name, amount: x.amount ? toCode(x.amount.v, x.amount.c) : 0 }));
+    return J.essentials(budgetRows(), { items, extras });
+  }
+
+  function essentialsTotal() {
+    const e = essentialsList();
+    return e.total == null ? NaN : e.total;
+  }
+
+  // ---------------------------------------------------------------------------
   // Fields
   // ---------------------------------------------------------------------------
 
@@ -114,21 +158,25 @@
   const SOURCES = {
     income: () => ({ value: budget().income, label: 'your budget' }),
     expenses: () => ({ value: budget().expenses, label: 'your budget' }),
-    essentials: () => ({ value: budget().fixed, label: 'your fixed costs' }),
+    essentials: () => ({ value: essentialsTotal(), label: 'your essentials list' }),
     emergencyMonthly: () => ({ value: budget().emergencyMonthly, label: 'your Emergency fund split' }),
     goalMonthly: () => ({ value: budget().savingsMonthly, label: 'your Long-term savings split' }),
     emergencySaved: () => ({ value: savedValue('savings'), label: 'your savings balance' }),
   };
 
   const FIELDS = {
-    savings: { label: 'Savings you could use', type: 'money', help: 'Used by every calculator.' },
+    savings: { label: 'Savings available now', type: 'money', help: 'Used by every calculator.' },
+    confirmedMoney: { label: 'Confirmed money coming', type: 'money', help: 'Only what you’ve been told you’ll get, e.g. final pay or leave payout.' },
+    uncertainMoney: { label: 'Uncertain or estimated money', type: 'money', help: 'Left out of the results unless you include it.' },
+    includeUncertain: { label: 'Include uncertain money in the results', type: 'toggle' },
+    essentialsList: { label: 'Essential costs', type: 'essentials' },
     income: { label: 'Monthly income', type: 'money', source: 'income' },
-    expenses: { label: 'Monthly costs', type: 'money', source: 'expenses' },
+    expenses: { label: 'Monthly spending', type: 'money', source: 'expenses' },
     essentials: { label: 'Essential monthly costs', type: 'money', source: 'essentials' },
     cover: { label: 'Months of cover', type: 'choice', options: [3, 6, 12], unit: 'months' },
     emergencySaved: { label: 'Already set aside', type: 'money', source: 'emergencySaved' },
     emergencyMonthly: { label: 'Adding each month', type: 'money', source: 'emergencyMonthly' },
-    incomeDuring: { label: 'Income you’d still have each month', type: 'money', help: 'e.g. part-time work' },
+    incomeDuring: { label: 'Reliable income you’d still have each month', type: 'money', help: 'Only money you can count on, e.g. part-time work.' },
     lumpSum: { label: 'Payout or other one-off money', type: 'money', help: 'e.g. redundancy pay' },
     duration: { label: 'Time off', type: 'choice', options: [3, 6, 12], unit: 'months' },
     goalName: { label: 'What you’re saving for', type: 'text', placeholder: 'e.g. A trip home' },
@@ -173,7 +221,7 @@
   function money(n) {
     const meta = getCurrencyMeta(code());
     const abs = Math.abs(n);
-    const digits = abs >= 100 ? 0 : meta.decimals;
+    const digits = abs >= 100 || abs === 0 ? 0 : meta.decimals;
     const gap = /[A-Za-z]$/.test(meta.symbol) ? ' ' : '';
     // Comma grouping to match what people type in the fields.
     return `${n < 0 ? '−' : ''}${meta.symbol}${gap}${abs.toLocaleString('en-US', { minimumFractionDigits: digits, maximumFractionDigits: digits })}`;
@@ -186,6 +234,127 @@
   /** "early July 2027" — honest precision for a date months away. */
   const partOfMonth = (d) => (d ? `${d.getDate() <= 10 ? 'early' : d.getDate() <= 20 ? 'mid' : 'late'} ${monthYear(d)}` : 'indefinitely');
   const dayMonth = (d) => d.toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' });
+
+  // ---------------------------------------------------------------------------
+  // Runway: current spending vs essentials only
+  // ---------------------------------------------------------------------------
+
+  const approxMonths = (m) => `${(Math.round(m * 10) / 10).toFixed(1)} months`;
+  const dayTime = (d) => d.toLocaleString('en-GB', { day: 'numeric', month: 'short', year: 'numeric', hour: 'numeric', minute: '2-digit' });
+
+  /** Words and figures for one scenario, straight from its result. */
+  function describeScenario(r, which, funds) {
+    const lead = which === 'current'
+      ? 'Based on your current spending and the funds you’ve entered,'
+      : 'If you reduced spending to the essential costs you’ve selected,';
+    const out = { status: r.status, big: '—', date: '—' };
+    switch (r.status) {
+      case 'depleting':
+        out.big = `About ${approxMonths(r.months)}`;
+        out.date = partOfMonth(r.endDate);
+        out.sentence = `${lead} your money could last about ${approxMonths(r.months)}.`;
+        break;
+      case 'under-month':
+        out.big = r.days === 1 ? 'About 1 day' : `About ${r.days} days`;
+        out.date = dayMonth(r.endDate);
+        out.sentence = `${lead} your money could last less than a month: about ${r.days} days.`;
+        break;
+      case 'decades':
+        out.big = '50+ years';
+        out.sentence = `${lead} your money could last more than 50 years at this level.`;
+        break;
+      case 'flat':
+        out.big = 'Not drawn down';
+        out.sentence = 'Your reliable income matches this spending, so your funds wouldn’t be used up.';
+        break;
+      case 'surplus':
+        out.big = 'Not drawn down';
+        out.sentence = `Your reliable income is ${money(r.surplus)} a month more than this spending, so your funds wouldn’t be used up.`;
+        break;
+      case 'no-funds':
+        out.big = 'No funds';
+        out.sentence = `With no funds entered, this spending leaves a gap of ${money(r.burn)} a month from the start.`;
+        break;
+      default:
+        out.sentence = which === 'current' ? 'Add your monthly spending to see this.' : 'Choose your essential costs below to see this.';
+    }
+    const known = r.status !== 'invalid';
+    out.rows = [
+      ['Monthly spending', known ? money(r.expenses) : '—'],
+      ['Reliable income', known ? money(r.income) : '—'],
+      [known && r.burn < 0 ? 'Monthly surplus' : 'Monthly shortfall', known ? money(Math.abs(r.burn)) : '—'],
+      ['Available funds', money(funds)],
+      ['Runway', out.big],
+      ['Runs out', out.date],
+    ];
+    return out;
+  }
+
+  function twoScenarioRunway() {
+    const spend = value('expenses');
+    const income = value('incomeDuring') || 0;
+    const ess = essentialsList();
+    const f = J.availableFunds({
+      now: value('savings'),
+      confirmed: value('confirmedMoney'),
+      uncertain: value('uncertainMoney'),
+      includeUncertain: Boolean(value('includeUncertain')),
+    });
+    if (!spend && !ess.total) return { empty: { title: 'No monthly spending yet', text: 'Type your spending below, or fill in your budget.' } };
+
+    const today = new Date();
+    const A = J.runwayScenario({ funds: f.total, expenses: spend, income, today });
+    const B = ess.count ? J.runwayScenario({ funds: f.total, expenses: ess.total == null ? NaN : ess.total, income, today }) : { status: 'invalid' };
+    const scenarios = [
+      { title: 'Current spending', ...describeScenario(A, 'current', f.total) },
+      { title: 'Essentials only', ...describeScenario(B, 'essentials', f.total) },
+    ];
+
+    const notes = [];
+    // What drives the difference, from the actual figures.
+    if (A.status !== 'invalid' && B.status !== 'invalid') {
+      const gap = spend - ess.total;
+      if (gap > 0.5) {
+        const extras = ess.items.filter((i) => !i.on && Number.isFinite(i.amount)).sort((a, b) => b.amount - a.amount).slice(0, 2).map((i) => i.name.toLowerCase());
+        notes.push(`The difference comes from ${money(gap)} a month of spending you haven’t marked essential${extras.length ? `, mainly ${extras.join(' and ')}` : ''}.`);
+      } else {
+        notes.push('Your essential costs are about the same as your current spending, so the two scenarios are close.');
+      }
+    }
+    // Uncertain money: show its effect either way.
+    if (f.uncertain > 0) {
+      const other = J.runwayScenario({ funds: f.uncertainIncluded ? f.total - f.uncertain : f.withUncertain, expenses: spend, income, today });
+      const otherText = other.status === 'depleting' ? `about ${approxMonths(other.months)}` : other.status === 'under-month' ? `about ${other.days} days` : null;
+      if (f.uncertainIncluded) {
+        notes.push(`Includes ${money(f.uncertain)} you’re not sure of.${otherText ? ` Without it, current spending would last ${otherText}.` : ''}`);
+      } else {
+        notes.push(`Not included: ${money(f.uncertain)} of uncertain money.${otherText ? ` If it does arrive, current spending would last ${otherText}.` : ''}`);
+      }
+    }
+    if (ess.unconfirmed > 0) notes.push('Which costs count as essential is our suggestion until you check it. Review them below.');
+
+    const own = savedValue('expenses');
+    const counted = [`${money(f.now)} available now`];
+    if (f.confirmed) counted.push(`${money(f.confirmed)} confirmed`);
+    if (f.uncertainIncluded) counted.push(`${money(f.uncertain)} uncertain`);
+    const fundsText = `${money(f.total)}${counted.length > 1 ? ` (${counted.join(' + ')})` : ''}${f.uncertain && !f.uncertainIncluded ? `. ${money(f.uncertain)} uncertain, not included` : ''}`;
+    const rates = window.BudgetRates ? window.BudgetRates() : null;
+    const assumptions = [
+      ['Calculated', dayTime(today)],
+      ['Starting funds', fundsText],
+      ['Current spending', Number.isFinite(spend) ? `${money(spend)} a month, ${own != null && own !== '' ? 'your figure' : 'from your budget'}` : '—'],
+      ['Essential spending', ess.total != null ? `${money(ess.total)} a month, ${ess.count} cost${ess.count === 1 ? '' : 's'}` : '—'],
+      ['Reliable income', income ? `${money(income)} a month` : 'None entered'],
+      ['Currency', convertedSomething && rates ? `${code()}. ${rates.text}` : code()],
+    ];
+    return {
+      scenarios,
+      notes,
+      figures: assumptions,
+      behindTitle: 'How this is worked out',
+      footnote: 'Estimates from the figures you’ve entered. Dates assume your spending and income stay the same each month.',
+    };
+  }
 
   // ---------------------------------------------------------------------------
   // Tools: fields shown, and the answer they produce
@@ -297,10 +466,10 @@
       icon: 'life-buoy',
       presets: { default: { q: 'How much should I have in an emergency fund?' } },
       // Months of cover is chosen on the three targets in the answer itself.
-      fields: ['essentials', 'emergencySaved', 'emergencyMonthly'],
+      fields: ['emergencySaved', 'emergencyMonthly', 'essentialsList'],
       answer() {
-        const ess = value('essentials');
-        if (!ess) return { empty: { title: 'No essential costs yet', text: 'Type your essential monthly costs below, or fill in your budget.' } };
+        const ess = essentialsTotal();
+        if (!ess) return { empty: { title: 'No essential costs yet', text: 'Add them below, or fill in your budget.' } };
         const per = value('emergencyMonthly');
         const r = J.emergencyFund({ essentials: ess, months: value('cover'), saved: value('emergencySaved'), monthly: per });
         const targets = r.targets.map((t) => ({ label: `${t.months} months`, value: money(t.target), key: t.months }));
@@ -322,12 +491,13 @@
       name: 'Financial runway',
       icon: 'hourglass',
       presets: {
-        default: { q: 'How long could I manage without an income?', fields: ['savings', 'expenses', 'essentials', 'incomeDuring'] },
+        default: { q: 'How long could I manage without an income?', fields: ['savings', 'confirmedMoney', 'uncertainMoney', 'includeUncertain', 'incomeDuring', 'expenses', 'essentialsList'], twoScenarios: true },
         timeoff: { q: 'Could I afford to take six months off?', fields: ['duration', 'savings', 'expenses', 'incomeDuring'], defaults: { duration: 6 } },
         leave: { q: 'How much should I save before leaving my job?', fields: ['duration', 'savings', 'expenses', 'incomeDuring'], defaults: { duration: 6 } },
-        jobloss: { q: 'What would happen if I lost my job?', fields: ['savings', 'lumpSum', 'expenses', 'essentials', 'incomeDuring'] },
+        jobloss: { q: 'What would happen if I lost my job?', fields: ['savings', 'confirmedMoney', 'uncertainMoney', 'includeUncertain', 'incomeDuring', 'expenses', 'essentialsList'], twoScenarios: true },
       },
       answer(p, preset) {
+        if (preset.twoScenarios) return twoScenarioRunway();
         const costs = value('expenses');
         if (!costs) return { empty: { title: 'No monthly costs yet', text: 'Type your costs and savings below, or fill in your budget.' } };
         const duration = preset.fields.includes('duration') ? Number(value('duration') || preset.defaults.duration) : 0;
@@ -479,7 +649,7 @@
   function presetOf(id, key) {
     const tool = TOOLS[id];
     const p = (tool && tool.presets[key]) || tool.presets.default;
-    return { fields: p.fields || tool.fields, defaults: p.defaults || {}, q: p.q, chips: p.chips };
+    return { fields: p.fields || tool.fields, defaults: p.defaults || {}, q: p.q, chips: p.chips, twoScenarios: Boolean(p.twoScenarios) };
   }
 
   function fieldHint(key) {
@@ -498,8 +668,195 @@
     return f.help ? { text: f.help } : null;
   }
 
+  let essOpen = false; // keep the essentials list open across re-renders
+
+  /** The essentials list: tick, edit, reset or add costs; total updates live. */
+  function buildEssentials() {
+    const wrap = el('div', 'tool-field tool-field--essentials');
+    const det = document.createElement('details');
+    det.className = 'ess';
+    det.open = essOpen;
+    det.addEventListener('toggle', () => {
+      essOpen = det.open;
+    });
+    const sum = el('summary', 'ess-summary');
+    sum.appendChild(el('span', 'ess-summary-label', 'Essential costs'));
+    const total = el('span', 'ess-summary-total');
+    total.id = 'essTotal';
+    sum.appendChild(total);
+    det.appendChild(sum);
+
+    det.appendChild(el('p', 'ess-intro', 'Suggested from your budget: fixed costs and necessities like groceries and transport. Untick what doesn’t apply, change amounts, or add what’s missing.'));
+
+    const list = essentialsList();
+    const ul = el('ul', 'ess-list');
+    const sym = getCurrencyMeta(code()).symbol;
+
+    const moneyInput = (value, label, onInput) => {
+      const w = el('div', 'money-input-wrap input-wrap ess-amount');
+      const sp = el('span', 'money-symbol', sym);
+      sp.setAttribute('aria-hidden', 'true');
+      w.appendChild(sp);
+      const inp = document.createElement('input');
+      inp.className = 'cell-input';
+      inp.setAttribute('aria-label', label);
+      attachAmountInputFormatting(inp, () => getCurrencyMeta(code()).decimals);
+      inp.placeholder = '0';
+      if (Number.isFinite(value) && value > 0) {
+        inp.value = String(Math.round(value * 100) / 100);
+        inp.formatAmountValue();
+      }
+      inp.addEventListener('input', () => onInput(inp.value.trim() === '' ? null : parseAmount(inp.value)));
+      w.appendChild(inp);
+      return w;
+    };
+
+    list.items.forEach((item) => {
+      const li = el('li', 'ess-item' + (item.on ? '' : ' is-off'));
+      const lab = el('label', 'ess-check');
+      const cb = document.createElement('input');
+      cb.type = 'checkbox';
+      cb.checked = item.on;
+      cb.addEventListener('change', () => {
+        const st = essStore();
+        st.items[item.key] = { ...(st.items[item.key] || {}), on: cb.checked };
+        saveStore();
+        li.classList.toggle('is-off', !cb.checked);
+        li.querySelector('.ess-tag')?.remove();
+        render(false);
+      });
+      lab.appendChild(cb);
+      const text = el('span', 'ess-check-text');
+      text.appendChild(el('span', 'ess-name', item.name));
+      if (!item.confirmed) text.appendChild(el('span', 'ess-tag', 'Suggested'));
+      lab.appendChild(text);
+      li.appendChild(lab);
+      li.appendChild(
+        moneyInput(item.amount, `${item.name}, essential amount per month`, (v) => {
+          const st = essStore();
+          const prev = st.items[item.key] || {};
+          if (v == null) delete prev.amount;
+          else prev.amount = { v, c: code() };
+          st.items[item.key] = prev;
+          saveStore();
+          const edited = v != null && Math.abs(v - item.budgetAmount) > 0.005;
+          let meta = li.querySelector('.ess-meta');
+          if (edited && !meta && Number.isFinite(item.budgetAmount)) li.appendChild(essMeta(item));
+          else if (!edited && meta) meta.remove();
+          render(false);
+        })
+      );
+      if (item.edited && Number.isFinite(item.budgetAmount)) li.appendChild(essMeta(item));
+      ul.appendChild(li);
+    });
+
+    function essMeta(item) {
+      const meta = el('p', 'ess-meta', `Budget: ${money(item.budgetAmount)} `);
+      const reset = el('button', 'tool-reset', 'Reset');
+      reset.type = 'button';
+      reset.addEventListener('click', () => {
+        const st = essStore();
+        if (st.items[item.key]) delete st.items[item.key].amount;
+        saveStore();
+        render(true);
+      });
+      meta.appendChild(reset);
+      return meta;
+    }
+
+    essStore().extras.forEach((x, i) => {
+      const li = el('li', 'ess-item ess-extra');
+      const name = document.createElement('input');
+      name.type = 'text';
+      name.className = 'cell-input ess-extra-name';
+      name.placeholder = 'e.g. Medication';
+      name.setAttribute('aria-label', 'Essential cost name');
+      name.value = x.name || '';
+      name.addEventListener('input', () => {
+        essStore().extras[i].name = name.value;
+        saveStore();
+      });
+      li.appendChild(name);
+      li.appendChild(
+        moneyInput(x.amount ? toCode(x.amount.v, x.amount.c) : NaN, `${x.name || 'Added cost'}, amount per month`, (v) => {
+          essStore().extras[i].amount = v == null ? null : { v, c: code() };
+          saveStore();
+          render(false);
+        })
+      );
+      const rm = el('button', 'ess-remove', '✕');
+      rm.type = 'button';
+      rm.setAttribute('aria-label', `Remove ${x.name || 'this cost'}`);
+      rm.addEventListener('click', () => {
+        essStore().extras.splice(i, 1);
+        saveStore();
+        render(true);
+      });
+      li.appendChild(rm);
+      ul.appendChild(li);
+    });
+    det.appendChild(ul);
+    if (!list.items.length && !essStore().extras.length) {
+      det.appendChild(el('p', 'ess-intro', 'No budget costs yet. Add essential costs here, or fill in your budget.'));
+    }
+
+    const add = el('button', 'ess-add', '+ Add an essential cost');
+    add.type = 'button';
+    add.addEventListener('click', () => {
+      essStore().extras.push({ id: `x${Date.now()}`, name: '', amount: null });
+      saveStore();
+      essOpen = true;
+      render(true);
+      const names = document.querySelectorAll('.ess-extra-name');
+      if (names.length) names[names.length - 1].focus();
+    });
+    const actions = el('div', 'ess-actions');
+    actions.appendChild(add);
+    if (list.unconfirmed > 0) {
+      // Explicit confirmation: suggestions become the user's own choices.
+      const ok = el('button', 'ess-confirm', 'These are right');
+      ok.type = 'button';
+      ok.addEventListener('click', () => {
+        const st = essStore();
+        essentialsList().items.forEach((i) => {
+          st.items[i.key] = { ...(st.items[i.key] || {}), on: i.on };
+        });
+        saveStore();
+        render(true);
+      });
+      actions.appendChild(ok);
+    }
+    det.appendChild(actions);
+    wrap.appendChild(det);
+    return wrap;
+  }
+
+  function updateEssentialsSummary() {
+    const t = $('essTotal');
+    if (!t) return;
+    const e = essentialsList();
+    t.textContent = e.total == null ? '—' : `${money(e.total)} a month · ${e.count} cost${e.count === 1 ? '' : 's'}`;
+  }
+
   function buildField(key, preset) {
     const f = FIELDS[key];
+    if (f.type === 'essentials') return buildEssentials();
+    if (f.type === 'toggle') {
+      const wrap = el('div', 'tool-field tool-field--toggle');
+      const lab = el('label', 'tool-toggle');
+      const cb = document.createElement('input');
+      cb.type = 'checkbox';
+      cb.id = `tf-${key}`;
+      cb.checked = Boolean(value(key));
+      cb.addEventListener('change', () => {
+        setValue(key, cb.checked ? true : null);
+        render(false);
+      });
+      lab.appendChild(cb);
+      lab.appendChild(el('span', '', f.label));
+      wrap.appendChild(lab);
+      return wrap;
+    }
     const wrap = el('div', `tool-field tool-field--${f.type}`);
     const id = `tf-${key}`;
     const label = el('label', 'tool-field-label', f.label);
@@ -543,7 +900,7 @@
       attachAmountInputFormatting(input, () => getCurrencyMeta(code()).decimals);
       const v = value(key);
       input.placeholder = '0';
-      if (v != null && v !== '' && Number(v) !== 0) {
+      if (v != null && v !== '' && Number.isFinite(Number(v)) && Number(v) !== 0) {
         input.value = String(Math.round(Number(v) * 100) / 100);
         input.formatAmountValue();
       }
@@ -619,7 +976,11 @@
     const { id, presetKey } = current;
     const tool = TOOLS[id];
     const preset = presetOf(id, presetKey);
-    const a = tool.answer(presetKey, preset) || {};
+    missingRates = new Set();
+    convertedSomething = false;
+    let a = tool.answer(presetKey, preset) || {};
+    // Any figure that needed a rate we don't have: hold the answer, say why.
+    if (missingRates.size) a = onHold([...missingRates]);
 
     // Empty: one clear card that says so, instead of an answer.
     const empty = $('toolEmpty');
@@ -630,6 +991,35 @@
       $('toolEmptyText').textContent = a.empty.text;
       $('toolEmptyLink').hidden = Boolean(a.noBudgetLink);
     }
+    $('toolEmptyRetry').hidden = !a.retry;
+    empty.dataset.kind = a.hold ? 'hold' : '';
+
+    // Two scenarios side by side (stacked on phones), instead of one answer.
+    const sc = $('toolScenarios');
+    sc.innerHTML = '';
+    sc.hidden = !a.scenarios;
+    if (a.scenarios) {
+      $('toolAnswer').hidden = true;
+      a.scenarios.forEach((x, i) => {
+        const card = el('section', `tool-scenario tool-scenario--${i === 0 ? 'current' : 'essentials'}`);
+        card.dataset.status = x.status;
+        card.appendChild(el('h2', 'tool-scenario-title', x.title));
+        card.appendChild(el('p', 'tool-scenario-big', x.big));
+        card.appendChild(el('p', 'tool-scenario-text', x.sentence));
+        const dl = el('dl', 'tool-figures tool-scenario-figures');
+        x.rows.forEach(([k, v]) => {
+          const row = el('div', 'tool-figure');
+          row.appendChild(el('dt', '', k));
+          row.appendChild(el('dd', '', v));
+          dl.appendChild(row);
+        });
+        card.appendChild(dl);
+        sc.appendChild(card);
+      });
+    }
+    $('toolBehindTitle').textContent = a.behindTitle || 'Behind the answer';
+    $('toolFootnote').textContent = a.footnote || '';
+    $('toolFootnote').hidden = !a.footnote;
     $('toolAdjust').hidden = !presetOf(current.id, current.presetKey).fields.length || Boolean(a.hideFields);
     $('toolSource').hidden = Boolean(a.empty); // the empty card already links to the budget
 
@@ -695,12 +1085,36 @@
       li.appendChild(bar);
       list.appendChild(li);
     });
+    // Scenario notes (what drives the difference, uncertain money) sit under
+    // the two scenarios; other notes go with the working.
     const notes = $('toolNotes');
+    const scNotes = $('toolScenarioNotes');
     notes.innerHTML = '';
-    (a.notes || []).forEach((n) => notes.appendChild(el('li', '', n)));
-    $('toolBehind').hidden = Boolean(a.empty) || (!(a.figures && a.figures.length) && !(a.list && a.list.length) && !(a.notes && a.notes.length));
+    scNotes.innerHTML = '';
+    (a.notes || []).forEach((n) => (a.scenarios ? scNotes : notes).appendChild(el('li', '', n)));
+    scNotes.hidden = !(a.scenarios && a.notes && a.notes.length);
+    $('toolBehind').hidden = Boolean(a.empty) || (!(a.figures && a.figures.length) && !(a.list && a.list.length) && !(!a.scenarios && a.notes && a.notes.length));
     $('toolColumns').classList.toggle('is-single', $('toolBehind').hidden || $('toolAdjust').hidden);
     renderHints();
+    updateEssentialsSummary();
+  }
+
+  /** The answer needs a rate we don't have: say which, keep the figures, offer a retry. */
+  function onHold(codes) {
+    const list = codes.length > 1 ? `${codes.slice(0, -1).join(', ')} and ${codes.at(-1)}` : codes[0];
+    const r = window.BudgetRates ? window.BudgetRates() : {};
+    if (r.loading) {
+      return { hold: true, empty: { title: 'Loading exchange rates…', text: `Needed to convert ${list} to ${code()}.` }, noBudgetLink: true };
+    }
+    return {
+      hold: true,
+      retry: true,
+      noBudgetLink: true,
+      empty: {
+        title: `Can’t convert ${list} to ${code()} yet`,
+        text: 'Without an exchange rate this answer would be wrong, so it’s on hold. Your figures are kept, and it updates as soon as rates load.',
+      },
+    };
   }
 
   /** Full render (fields + answer), or just the answer while someone is typing. */
@@ -767,6 +1181,15 @@
       } catch (e) {
         /* ignore */
       }
+    });
+  }
+
+  const retry = $('toolEmptyRetry');
+  if (retry) {
+    retry.addEventListener('click', () => {
+      const r = window.BudgetRates && window.BudgetRates();
+      if (r && r.retry) r.retry();
+      render(false);
     });
   }
 

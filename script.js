@@ -114,6 +114,11 @@ let chartInstance = null;
 let vndRatesCache = null;
 let ratesFetchedAt = null;
 let ratesLoading = false;
+// Where the rates came from, and whether they're a saved copy from an earlier
+// visit (used when a refresh fails, and shown wherever rates are used).
+let ratesSource = null;
+let ratesCached = false;
+const RATES_STORAGE_KEY = 'budgetBuddyRates_v1';
 
 /** @type {Array<{id:string,label:string,percent:number,kind:string,required:boolean}>} */
 let currentSplits = Core
@@ -562,15 +567,13 @@ function updateRateHints() {
   const reportingCode = getReportingCurrency();
 
   if (ratesMetaEl) {
-    if (ratesLoading) {
+    if (ratesLoading && !vndRatesCache) {
       ratesMetaEl.textContent = 'Loading exchange rates…';
     } else if (!vndRatesCache) {
       ratesMetaEl.textContent =
         'Exchange rates unavailable — converted totals show “—”. Check your connection.';
-    } else if (ratesFetchedAt) {
-      ratesMetaEl.textContent = `Rates updated: ${ratesFetchedAt.toLocaleString()}.`;
     } else {
-      ratesMetaEl.textContent = 'Exchange rates loaded.';
+      ratesMetaEl.textContent = describeRates();
     }
   }
 
@@ -602,9 +605,57 @@ function getRatesObject(data) {
   return data.conversion_rates || data.rates || null;
 }
 
+/** "Rates from open.er-api.com, updated 9 Nov 2026, 7:02 am (saved copy — couldn't refresh)." */
+function describeRates() {
+  if (!vndRatesCache) return 'Exchange rates unavailable.';
+  const when = ratesFetchedAt ? `, updated ${ratesFetchedAt.toLocaleString(undefined, { day: 'numeric', month: 'short', year: 'numeric', hour: 'numeric', minute: '2-digit' })}` : '';
+  const from = ratesSource ? ` from ${ratesSource}` : '';
+  const note = ratesCached ? (ratesLoading ? ' (saved copy, refreshing…)' : ' (saved copy — couldn’t refresh)') : '';
+  return `Rates${from}${when}${note}.`;
+}
+
+function saveRatesCache() {
+  try {
+    localStorage.setItem(
+      RATES_STORAGE_KEY,
+      JSON.stringify({ rates: vndRatesCache, fetchedAt: ratesFetchedAt && ratesFetchedAt.toISOString(), source: ratesSource })
+    );
+  } catch (e) {
+    /* storage blocked */
+  }
+}
+
+/** Use the last good rates, clearly marked as a saved copy. */
+function useCachedRates() {
+  try {
+    const c = JSON.parse(localStorage.getItem(RATES_STORAGE_KEY) || 'null');
+    if (!c || !c.rates || typeof c.rates !== 'object') return false;
+    vndRatesCache = c.rates;
+    ratesFetchedAt = c.fetchedAt ? new Date(c.fetchedAt) : null;
+    ratesSource = c.source || null;
+    ratesCached = true;
+    return true;
+  } catch (e) {
+    return false;
+  }
+}
+
+/** For the calculators: what rates are in use. */
+window.BudgetRates = () => ({
+  available: Boolean(vndRatesCache),
+  loading: ratesLoading,
+  source: ratesSource,
+  fetchedAt: ratesFetchedAt,
+  cached: ratesCached,
+  text: describeRates(),
+  retry: loadExchangeRates,
+});
+
 async function loadExchangeRates() {
   if (ratesLoading) return;
   ratesLoading = true;
+  // A saved copy keeps things working (clearly labelled) while we refresh.
+  if (!vndRatesCache) useCachedRates();
   updateRateHints();
 
   try {
@@ -621,6 +672,9 @@ async function loadExchangeRates() {
     ratesFetchedAt = data.time_last_update_unix
       ? new Date(data.time_last_update_unix * 1000)
       : new Date();
+    ratesSource = 'open.er-api.com';
+    ratesCached = false;
+    saveRatesCache();
   } catch (e1) {
     try {
       const res2 = await fetch('https://api.exchangerate.host/latest?base=VND');
@@ -630,9 +684,17 @@ async function loadExchangeRates() {
       }
       vndRatesCache = data2.rates;
       ratesFetchedAt = data2.date ? new Date(data2.date) : new Date();
+      ratesSource = 'exchangerate.host';
+      ratesCached = false;
+      saveRatesCache();
     } catch (e2) {
-      vndRatesCache = null;
-      ratesFetchedAt = null;
+      // Both sources failed: fall back to the last saved rates, if any.
+      if (!useCachedRates()) {
+        vndRatesCache = null;
+        ratesFetchedAt = null;
+        ratesSource = null;
+        ratesCached = false;
+      }
     }
   } finally {
     ratesLoading = false;

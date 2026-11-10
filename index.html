@@ -12,8 +12,8 @@
       href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700&display=swap"
       rel="stylesheet"
     />
-    <link rel="stylesheet" href="./styles.css?v=20261109z" />
-    <link rel="stylesheet" href="./home.css?v=20261109z" />
+    <link rel="stylesheet" href="./styles.css?v=20261110c" />
+    <link rel="stylesheet" href="./home.css?v=20261110c" />
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
   </head>
   <body data-view="home">
@@ -272,7 +272,11 @@
           <h2 class="tool-empty-title" id="toolEmptyTitle"></h2>
           <p class="tool-empty-text" id="toolEmptyText"></p>
           <a href="#go/income" class="tool-empty-link" id="toolEmptyLink">Fill in your budget →</a>
+          <button type="button" class="tool-empty-link" id="toolEmptyRetry" hidden>Try loading rates again</button>
         </section>
+
+        <div class="tool-scenarios" id="toolScenarios" aria-live="polite" hidden></div>
+        <ul class="tool-notes tool-scenario-notes" id="toolScenarioNotes" hidden></ul>
 
         <div class="tool-columns" id="toolColumns">
           <section class="tool-section" id="toolAdjust" aria-labelledby="toolAdjustTitle">
@@ -285,6 +289,7 @@
             <dl class="tool-figures" id="toolFigures"></dl>
             <ol class="tool-rank-list" id="toolRankList"></ol>
             <ul class="tool-notes" id="toolNotes"></ul>
+            <p class="tool-footnote" id="toolFootnote" hidden></p>
           </section>
         </div>
 
@@ -303,7 +308,9 @@
           <li>Everything is converted to a monthly figure first. Weekly amounts are ×52÷12, fortnightly ×26÷12, quarterly ÷3 and yearly ÷12.</li>
           <li>Left over is your monthly income minus your expenses, minus what you set aside for savings and goals.</li>
           <li>Savings &amp; goals are percentages of your income. The starting split (50% expenses, 30% long-term savings, 10% emergency fund, 10% investments) is only a suggestion until you change it.</li>
-          <li>The journey calculators use the same figures. Essentials are your fixed costs. Runway rounds down to whole months; time to reach a target rounds up.</li>
+          <li>The journey calculators use the same figures. Essential costs are suggested from your budget (fixed costs plus necessities such as groceries and transport) and you confirm or change them.</li>
+          <li>Runway is your available funds ÷ (monthly spending − reliable income), counted from today. Uncertain payments are left out unless you include them. Dates assume spending and income stay the same; they’re estimates, not guarantees.</li>
+          <li>If an exchange rate is missing, results that need it are put on hold rather than guessed. The last good rates are kept and labelled as a saved copy.</li>
           <li>Each expense can be in its own currency. Totals are converted using daily exchange rates from open.er-api.com, and show “—” if rates can’t be loaded rather than guessing.</li>
         </ul>
 
@@ -991,14 +998,14 @@
     </nav>
 
     <script src="./icons.js"></script>
-    <script src="./budget-core.js?v=20261109z"></script>
-    <script src="./script.js?v=20261109z"></script>
-    <script src="./receipt-core.js?v=20261109z"></script>
-    <script src="./receipts.js?v=20261109z"></script>
-    <script src="./nav.js?v=20261109z"></script>
-    <script src="./overview.js?v=20261109z"></script>
-    <script src="./journey-core.js?v=20261109z"></script>
-    <script src="./journeys.js?v=20261109z"></script>
-    <script src="./home.js?v=20261109z"></script>
+    <script src="./budget-core.js?v=20261110c"></script>
+    <script src="./script.js?v=20261110c"></script>
+    <script src="./receipt-core.js?v=20261110c"></script>
+    <script src="./receipts.js?v=20261110c"></script>
+    <script src="./nav.js?v=20261110c"></script>
+    <script src="./overview.js?v=20261110c"></script>
+    <script src="./journey-core.js?v=20261110c"></script>
+    <script src="./journeys.js?v=20261110c"></script>
+    <script src="./home.js?v=20261110c"></script>
   </body>
 </html>

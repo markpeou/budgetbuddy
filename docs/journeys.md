@@ -10,7 +10,9 @@ Calculators fill in from the budget planner when there is one, and every figure 
 
 ## Decisions
 
-- **Essentials = fixed costs.** Users change essentials by editing their fixed costs.
+- **Essentials are suggested, then confirmed.** (Updated: was "fixed costs only", which undercounted groceries, transport and utilities.) The list starts from the budget: fixed costs and variable costs whose names suggest necessities, each marked *Suggested*. Users tick, untick, edit amounts, add missing costs, or confirm the lot. Runway and emergency fund share the list.
+- **Money by certainty.** Available now + confirmed money count; uncertain or estimated money is excluded unless the user includes it, and its effect is shown either way. No redundancy or benefit entitlements are calculated.
+- **Never guess a conversion.** A missing exchange rate puts the affected answer on hold and names the currency. The last good rates are cached and labelled as a saved copy.
 - **Emergency fund cover is the user's choice.** Targets for 3, 6 and 12 months show side by side; nothing is preselected.
 - **Savings balance is one figure**, entered once and shared by every calculator. Savings in several countries is a backlog item.
 - **Neutral readings.** No "good" or "bad" verdicts on someone's finances; show the figure and what moves it.
@@ -43,7 +45,7 @@ Answer: four neutral readings — savings rate, share of income locked into fixe
 ### Build my financial safety net
 
 **How much should I have in an emergency fund?** — *A target, and how far away I am.*
-Answer: "Aim for ₫72M (6 months of essential costs). You have ₫20M — ₫52M to go, about 10 months at your current rate." Behind it: essentials × months; gap ÷ monthly contribution. Levers: months of cover (3/6/12), monthly contribution. Inputs: essentials (fixed costs), amount set aside, monthly contribution (from the Emergency fund split).
+Answer: "Aim for ₫72M (6 months of essential costs). You have ₫20M — ₫52M to go, about 10 months at your current rate." Behind it: essentials × months; gap ÷ monthly contribution. Levers: months of cover (3/6/12), monthly contribution. Inputs: essential costs (shared essentials list), amount set aside, monthly contribution (from the Emergency fund split).
 
 **How long could I manage without an income?** — *How much time I'd have.*
 Answer: "Your savings would last 5 months — until April 2027." Behind it: savings ÷ monthly costs. Levers: cutting to essentials, any income you'd still have. Inputs: savings, monthly costs.
@@ -62,5 +64,9 @@ Answer: "On ₫20M you'd have ₫2.1M left a month instead of ₫8.4M — ₫75M
 **Could I afford to change careers?** — *Can I survive the switch, and is it worth it?*
 Answer: "The switch costs ₫60M in total. Afterwards you'd have ₫4M a month left (vs ₫8.4M now)." If the new pay is higher: "You'd be ahead after 18 months." Inputs: months of transition, income during it, one-off costs, new salary.
 
-**What would happen if I lost my job?** — *How long until it's a crisis.*
-Answer: "With ₫50M saved plus a ₫30M payout you could cover 6 months; cutting to essentials stretches that to 9." Inputs: savings, payout or other income.
+**What would happen if I lost my job?** — *How long my money lasts, and what changes it.*
+Two scenarios side by side (stacked on phones), each with monthly spending, reliable income, monthly shortfall, available funds, runway (to one decimal) and the estimated run-out date:
+- **Current spending:** "Based on your current spending and the funds you've entered, your money could last about 8.1 months."
+- **Essentials only:** "If you reduced spending to the essential costs you've selected, your funds could last about 9.3 months." A what-if, not a recommendation.
+
+Underneath: what drives the difference (the non-essential spending, with its biggest items), the effect of uncertain money, and a visible "How this is worked out" list (date calculated, starting funds, spending and income assumptions, which payments are included, currency and rates). Edge cases each have their own wording: not drawn down (income ≥ spending), no funds, under a month (in days), more than 50 years. Never Infinity, NaN or an invented date. "How long could I manage without an income?" uses the same page.

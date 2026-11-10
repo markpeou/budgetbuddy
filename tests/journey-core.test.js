@@ -132,3 +132,192 @@ ok('runway end date counts from today, using the exact months', () => {
   assert.strictEqual(end.getDate(), 1);
   assert.strictEqual(J.dateAfter(Infinity, today), null);
 });
+
+// ---------------------------------------------------------------------------
+// Job loss / runway accuracy (brief: Journey Accuracy & UX Improvements)
+// ---------------------------------------------------------------------------
+console.log('job loss accuracy');
+const BC = require('../budget-core.js');
+
+const ROWS = [
+  { name: 'Rent', kind: 'fixed', monthly: 1800 },
+  { name: 'Gym membership', kind: 'fixed', monthly: 60 },
+  { name: 'Groceries', kind: 'variable', monthly: 700 },
+  { name: 'Transport', kind: 'variable', monthly: 200 },
+  { name: 'Dining out', kind: 'variable', monthly: 300 },
+  { name: 'Netflix', kind: 'subs', monthly: 20 },
+];
+
+ok('essentials: fixed costs only', () => {
+  const e = J.essentials([{ name: 'Rent', kind: 'fixed', monthly: 1800 }, { name: 'Internet', kind: 'fixed', monthly: 80 }]);
+  assert.strictEqual(e.total, 1880);
+  assert.strictEqual(e.count, 2);
+});
+
+ok('essentials: variable costs only — necessities are not dropped for being variable', () => {
+  const e = J.essentials([{ name: 'Groceries', kind: 'variable', monthly: 700 }, { name: 'Fuel', kind: 'variable', monthly: 150 }, { name: 'Dining out', kind: 'variable', monthly: 300 }]);
+  assert.strictEqual(e.total, 850);
+  assert.deepStrictEqual(e.items.map((i) => i.on), [true, true, false]);
+});
+
+ok('essentials: fixed and variable combined; a fixed choice (gym) is not assumed essential', () => {
+  const e = J.essentials(ROWS);
+  assert.strictEqual(e.total, 1800 + 700 + 200); // rent, groceries, transport
+  assert.strictEqual(e.items.find((i) => i.name === 'Gym membership').on, false);
+  assert.strictEqual(e.unconfirmed, ROWS.length); // all still suggestions
+});
+
+ok('essentials: zero essential costs', () => {
+  const e = J.essentials([{ name: 'Dining out', kind: 'variable', monthly: 300 }]);
+  assert.strictEqual(e.total, 0);
+  assert.strictEqual(e.count, 0);
+  assert.strictEqual(J.essentials([]).total, 0);
+});
+
+ok('essentials: missing classification falls back to a suggestion by name', () => {
+  const e = J.essentials([{ name: 'Electricity', monthly: 90 }, { name: 'Mystery', monthly: 40 }]);
+  assert.deepStrictEqual(e.items.map((i) => i.on), [true, false]);
+  assert.ok(e.items.every((i) => !i.confirmed));
+});
+
+ok('essentials: user ticks, unticks, edits amounts and adds missing costs', () => {
+  const saved = {
+    items: {
+      'variable:groceries': { amount: 500 },
+      'variable:transport': { on: false },
+      'fixed:gym membership': { on: true },
+    },
+    extras: [{ id: 'x', name: 'Medication', amount: 45 }],
+  };
+  const e = J.essentials(ROWS, saved);
+  assert.strictEqual(e.total, 1800 + 500 + 60 + 45);
+  const g = e.items.find((i) => i.name === 'Groceries');
+  assert.ok(g.edited && g.budgetAmount === 700 && g.amount === 500);
+  assert.strictEqual(e.items.find((i) => i.name === 'Transport').confirmed, true);
+});
+
+ok('essentials: an unconverted included cost blocks the total (no guessing)', () => {
+  const e = J.essentials([{ name: 'Rent', kind: 'fixed', monthly: NaN }, { name: 'Groceries', kind: 'variable', monthly: 700 }]);
+  assert.strictEqual(e.ok, false);
+  assert.strictEqual(e.total, null);
+  // …but an unconverted cost the user excluded doesn't block anything.
+  const e2 = J.essentials([{ name: 'Rent', kind: 'fixed', monthly: NaN }], { items: { 'fixed:rent': { on: false } } });
+  assert.strictEqual(e2.ok, true);
+  assert.strictEqual(e2.total, 0);
+});
+
+const T = new Date(2026, 10, 10); // 10 Nov 2026
+
+ok('runway: positive monthly cash burn', () => {
+  const r = J.runwayScenario({ funds: 30000, expenses: 3898, income: 0, today: T });
+  assert.strictEqual(r.status, 'depleting');
+  assert.ok(Math.abs(r.months - 7.696) < 0.001);
+  assert.strictEqual(r.endDate.getMonth(), 6); // July 2027
+});
+
+ok('runway: zero monthly cash burn — funds not being used', () => {
+  const r = J.runwayScenario({ funds: 30000, expenses: 3000, income: 3000, today: T });
+  assert.strictEqual(r.status, 'flat');
+  assert.strictEqual(r.months, undefined);
+  assert.strictEqual(r.endDate, undefined);
+});
+
+ok('runway: negative monthly cash burn — income exceeds spending', () => {
+  const r = J.runwayScenario({ funds: 30000, expenses: 2000, income: 2500, today: T });
+  assert.strictEqual(r.status, 'surplus');
+  assert.strictEqual(r.surplus, 500);
+});
+
+ok('runway: zero available funds — no division by zero', () => {
+  const r = J.runwayScenario({ funds: 0, expenses: 3000, income: 0, today: T });
+  assert.strictEqual(r.status, 'no-funds');
+  assert.strictEqual(r.months, undefined);
+});
+
+ok('runway: less than one month', () => {
+  const r = J.runwayScenario({ funds: 1000, expenses: 3000, income: 0, today: T });
+  assert.strictEqual(r.status, 'under-month');
+  assert.strictEqual(r.days, 10); // 0.333 × 30.44
+});
+
+ok('runway: large available funds — no absurd dates', () => {
+  const r = J.runwayScenario({ funds: 50000000, expenses: 3000, income: 0, today: T });
+  assert.strictEqual(r.status, 'decades');
+  assert.strictEqual(r.months, null);
+  const big = J.runwayScenario({ funds: 1000000, expenses: 3000, income: 0, today: T });
+  assert.strictEqual(big.status, 'depleting');
+  assert.ok(Number.isFinite(big.months) && big.endDate.getFullYear() === 2054);
+});
+
+ok('runway: remaining income partially covers spending', () => {
+  const r = J.runwayScenario({ funds: 12000, expenses: 4000, income: 1000, today: T });
+  assert.strictEqual(r.burn, 3000);
+  assert.strictEqual(r.months, 4);
+});
+
+ok('runway: missing or invalid inputs never produce a number', () => {
+  for (const bad of [{ funds: NaN, expenses: 1 }, { funds: 1, expenses: undefined }, { funds: 1, expenses: 'x' }, { funds: -5, expenses: 100 }]) {
+    assert.strictEqual(J.runwayScenario(bad).status, 'invalid');
+  }
+});
+
+ok('one-off payments: confirmed included, uncertain excluded unless chosen', () => {
+  const f = J.availableFunds({ now: 20000, confirmed: 8000, uncertain: 5000 });
+  assert.strictEqual(f.total, 28000);
+  assert.strictEqual(f.withUncertain, 33000);
+  assert.strictEqual(f.uncertainIncluded, false);
+  assert.strictEqual(J.availableFunds({ now: 20000, confirmed: 8000, uncertain: 5000, includeUncertain: true }).total, 33000);
+});
+
+ok('one-off payments: none, and zero', () => {
+  assert.strictEqual(J.availableFunds({ now: 20000 }).total, 20000);
+  const z = J.availableFunds({ now: 20000, confirmed: 0, uncertain: 0, includeUncertain: true });
+  assert.strictEqual(z.total, 20000);
+  assert.strictEqual(z.uncertainIncluded, false);
+});
+
+const RATES = { VND: 1, AUD: 0.0000588, USD: 0.000038 };
+const conv = (rates) => (a, f, t) => BC.convert(a, f, t, rates);
+
+ok('currency: same currency', () => {
+  assert.deepStrictEqual(J.sumInCurrency([{ amount: 1000, currency: 'AUD' }], 'AUD', conv(null)), { ok: true, total: 1000, missing: [] });
+});
+
+ok('currency: valid conversion rate', () => {
+  const r = J.sumInCurrency([{ amount: 1000000, currency: 'VND' }], 'AUD', conv(RATES));
+  assert.ok(r.ok && Math.abs(r.total - 58.8) < 0.001);
+});
+
+ok('currency: missing rate is reported, never treated as converted', () => {
+  const r = J.sumInCurrency([{ amount: 1000, currency: 'AUD' }, { amount: 1000, currency: 'VND' }], 'AUD', conv(null));
+  assert.strictEqual(r.ok, false);
+  assert.strictEqual(r.total, null); // not 2000
+  assert.deepStrictEqual(r.missing, ['VND']);
+});
+
+ok('currency: invalid rates (0, negative, text, NaN) are rejected', () => {
+  for (const bad of [0, -1, 'abc', NaN, null]) {
+    const r = J.sumInCurrency([{ amount: 500, currency: 'USD' }], 'AUD', conv({ ...RATES, USD: bad }));
+    assert.strictEqual(r.ok, false, `rate ${bad}`);
+    assert.deepStrictEqual(r.missing, ['USD']);
+  }
+});
+
+ok('currency: cached rates convert exactly like live ones', () => {
+  const cached = JSON.parse(JSON.stringify(RATES)); // as restored from storage
+  const live = J.sumInCurrency([{ amount: 2000000, currency: 'VND' }], 'AUD', conv(RATES));
+  const fromCache = J.sumInCurrency([{ amount: 2000000, currency: 'VND' }], 'AUD', conv(cached));
+  assert.strictEqual(fromCache.total, live.total);
+});
+
+ok('currency: multiple expense currencies', () => {
+  const r = J.sumInCurrency([
+    { amount: 1000, currency: 'AUD' },
+    { amount: 17007000, currency: 'VND' }, // ≈ A$1,000
+    { amount: 100, currency: 'USD' },
+  ], 'AUD', conv(RATES));
+  assert.ok(r.ok);
+  assert.ok(Math.abs(r.total - (1000 + 1000.01 + 100 * 0.0000588 / 0.000038)) < 0.1);
+  const partial = J.sumInCurrency([{ amount: 1000, currency: 'AUD' }, { amount: 5, currency: 'EUR' }, { amount: 5, currency: 'GBP' }], 'AUD', conv(RATES));
+  assert.deepStrictEqual(partial.missing, ['EUR', 'GBP']);
+});

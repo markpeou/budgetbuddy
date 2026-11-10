@@ -208,5 +208,152 @@
     return out;
   }
 
-  return { breakdown, capacity, snapshot, emergencyFund, runway, savingsGoal, incomeChange, monthsUntil, addMonths, dateAfter };
+  // ---------------------------------------------------------------------------
+  // Essential costs: suggested from the budget, always confirmable by the user
+  // ---------------------------------------------------------------------------
+
+  // Names that usually mean a necessity, or usually mean a choice. Only used to
+  // *suggest*; the user's tick always wins.
+  const ESSENTIAL_WORDS = /\b(rent|mortgage|housing|strata|council|grocer\w*|supermarket|food|electric\w*|power|energy|gas|water|utilit\w*|internet|wifi|broadband|phone|mobile|transport|commut\w*|bus|train|metro|fuel|petrol|diesel|parking|toll\w*|health\w*|medical|doctor|dentist|pharmac\w*|medicine|prescription\w*|insurance|child ?care|daycare|school|tuition|loan|debt|repayment\w*|tax|household|toiletr\w*|baby|nappies|diapers)\b/i;
+  const CHOICE_WORDS = /\b(gym|netflix|spotify|disney|streaming|music|tv|entertainment|dining|restaurant\w*|takeaway|take-away|cafe|coffee|bar|drinks|alcohol|holiday\w*|travel|shopping|clothes|hobby|hobbies|games?|gaming|subscription\w*)\b/i;
+
+  /**
+   * Is this cost probably essential? Fixed costs lean yes, variable costs and
+   * subscriptions lean no, and the name can tip either way.
+   */
+  function suggestEssential(name, kind) {
+    const n = String(name || '');
+    if (CHOICE_WORDS.test(n)) return false;
+    if (ESSENTIAL_WORDS.test(n)) return true;
+    return kind === 'fixed';
+  }
+
+  /** Stable key for a budget row so a user's choice survives edits elsewhere. */
+  function essentialKey(row) {
+    return `${row.kind || 'other'}:${String(row.name || '').trim().toLowerCase()}`;
+  }
+
+  /**
+   * The essentials list and its total.
+   * @param {Array<{name, kind, monthly}>} rows  budget costs, monthly, already
+   *   in the target currency (NaN when a conversion failed)
+   * @param {{items?: Record<string,{on?:boolean, amount?:number}>, extras?: Array<{id,name,amount}>}} saved
+   */
+  function essentials(rows, saved = {}) {
+    const choices = saved.items || {};
+    const items = (rows || []).map((r) => {
+      const key = essentialKey(r);
+      const c = choices[key] || {};
+      const suggested = suggestEssential(r.name, r.kind);
+      const budgetAmount = Number(r.monthly);
+      const edited = c.amount != null && Number.isFinite(Number(c.amount));
+      return {
+        key,
+        name: String(r.name || '').trim() || 'Unnamed cost',
+        kind: r.kind,
+        budgetAmount,
+        amount: edited ? Math.max(0, Number(c.amount)) : budgetAmount,
+        on: typeof c.on === 'boolean' ? c.on : suggested,
+        confirmed: typeof c.on === 'boolean',
+        suggested,
+        edited,
+      };
+    });
+    const extras = (saved.extras || [])
+      .map((x) => ({ id: x.id, name: String(x.name || '').trim() || 'Other essential', amount: Math.max(0, Number(x.amount) || 0) }));
+    const included = items.filter((i) => i.on);
+    const unconverted = included.filter((i) => !Number.isFinite(i.amount));
+    const total = unconverted.length
+      ? null
+      : included.reduce((s, i) => s + i.amount, 0) + extras.reduce((s, x) => s + x.amount, 0);
+    return {
+      items,
+      extras,
+      total,
+      ok: unconverted.length === 0,
+      count: included.length + extras.length,
+      unconfirmed: items.filter((i) => !i.confirmed).length,
+    };
+  }
+
+  // ---------------------------------------------------------------------------
+  // Runway scenarios
+  // ---------------------------------------------------------------------------
+
+  /** Funds split by how certain they are. Uncertain money is opt-in. */
+  function availableFunds({ now = 0, confirmed = 0, uncertain = 0, includeUncertain = false }) {
+    const a = num(now);
+    const b = num(confirmed);
+    const c = num(uncertain);
+    return {
+      now: a,
+      confirmed: b,
+      uncertain: c,
+      total: a + b + (includeUncertain ? c : 0),
+      withUncertain: a + b + c,
+      uncertainIncluded: Boolean(includeUncertain) && c > 0,
+    };
+  }
+
+  const MAX_MONTHS = 600; // 50 years: beyond this a date is meaningless
+
+  /**
+   * One runway scenario. Never returns Infinity, NaN or a date it can't stand
+   * behind; `status` says which case applies:
+   *   invalid    — an input is missing or unconverted
+   *   surplus    — income still coming in is more than spending
+   *   flat       — income exactly covers spending; funds aren't used
+   *   no-funds   — spending exceeds income and there's nothing to draw on
+   *   under-month — funds last less than a month
+   *   depleting  — funds last `months` months, until `endDate`
+   *   decades    — more than 50 years
+   */
+  function runwayScenario({ funds, expenses, income = 0, today = new Date() }) {
+    const f = Number(funds);
+    const e = Number(expenses);
+    const i = Number(income) || 0;
+    if (![f, e, i].every(Number.isFinite) || e < 0 || f < 0 || i < 0) return { status: 'invalid' };
+    const burn = Math.round((e - i) * 100) / 100;
+    const base = { funds: f, expenses: e, income: i, burn };
+    if (burn < 0) return { ...base, status: 'surplus', surplus: -burn };
+    if (burn === 0) return { ...base, status: 'flat' };
+    if (f <= 0) return { ...base, status: 'no-funds' };
+    const months = f / burn;
+    if (months > MAX_MONTHS) return { ...base, status: 'decades', months: null };
+    const endDate = dateAfter(months, today);
+    if (months < 1) return { ...base, status: 'under-month', months, days: Math.max(0, Math.floor(months * DAYS_PER_MONTH)), endDate };
+    return { ...base, status: 'depleting', months, endDate };
+  }
+
+  // ---------------------------------------------------------------------------
+  // Currency: add amounts in different currencies without ever guessing
+  // ---------------------------------------------------------------------------
+
+  /**
+   * @param {Array<{amount:number, currency:string}>} entries
+   * @param {string} target
+   * @param {(amount, from, to) => number} convertFn  NaN when no valid rate
+   * @returns {{ok:boolean, total:number|null, missing:string[]}}
+   */
+  function sumInCurrency(entries, target, convertFn) {
+    const missing = [];
+    let total = 0;
+    for (const e of entries || []) {
+      const amt = Number(e.amount);
+      if (!Number.isFinite(amt) || amt === 0) continue;
+      const from = e.currency || target;
+      const v = from === target ? amt : convertFn(amt, from, target);
+      if (!Number.isFinite(v)) {
+        if (!missing.includes(from)) missing.push(from);
+        continue;
+      }
+      total += v;
+    }
+    return missing.length ? { ok: false, total: null, missing } : { ok: true, total, missing };
+  }
+
+  return {
+    breakdown, capacity, snapshot, emergencyFund, runway, savingsGoal, incomeChange, monthsUntil, addMonths, dateAfter,
+    suggestEssential, essentialKey, essentials, availableFunds, runwayScenario, sumInCurrency, MAX_MONTHS,
+  };
 });

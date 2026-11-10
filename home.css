@@ -1518,3 +1518,358 @@ body:not([data-view='app']) {
 .tool-card:hover .tool-arrow {
   transform: translateX(3px);
 }
+
+/* ------------------------------------------------------------------ */
+/* Runway: two scenarios, essentials list, on-hold state                */
+/* ------------------------------------------------------------------ */
+
+.tool-scenarios {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+}
+
+.tool-scenarios[hidden],
+.tool-scenario-notes[hidden],
+.tool-footnote[hidden] {
+  display: none;
+}
+
+.tool-scenario {
+  display: flex;
+  flex-direction: column;
+  padding: 20px;
+  border-radius: var(--radius-xl);
+  border: 1px solid var(--color-line);
+  background: var(--color-bg-surface);
+}
+
+/* Two neutral tints so the scenarios read as alternatives, not good vs bad. */
+.tool-scenario--current {
+  border-top: 4px solid var(--color-brand-primary);
+}
+
+.tool-scenario--essentials {
+  border-top: 4px solid var(--color-accent-teal);
+}
+
+.tool-scenario-title {
+  margin: 0;
+  color: var(--muted);
+  font-size: 13px;
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+
+.tool-scenario-big {
+  margin: 6px 0 4px;
+  color: var(--text);
+  font-size: clamp(26px, 3.4vw, 34px);
+  font-weight: 700;
+  letter-spacing: -0.02em;
+  font-variant-numeric: tabular-nums;
+}
+
+.tool-scenario-text {
+  margin: 0 0 14px;
+  color: var(--text);
+  font-size: 15px;
+  line-height: 1.5;
+}
+
+.tool-scenario-figures {
+  margin-top: auto;
+  padding-top: 12px;
+  border-top: 1px solid var(--color-line);
+}
+
+.tool-scenario-figures .tool-figure {
+  padding: 7px 0;
+  font-size: 14px;
+}
+
+.tool-scenario-figures .tool-figure:first-child {
+  padding-top: 0;
+}
+
+.tool-scenario-notes {
+  margin: 12px 0 0;
+}
+
+.tool-footnote {
+  margin: 14px 0 0;
+  color: var(--muted);
+  font-size: 13px;
+  line-height: 1.5;
+}
+
+/* Include-uncertain checkbox */
+.tool-toggle {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--text);
+  cursor: pointer;
+}
+
+.tool-toggle input,
+.ess-check input {
+  width: 20px;
+  height: 20px;
+  margin: 0;
+  accent-color: var(--color-brand-primary);
+  flex-shrink: 0;
+}
+
+/* Essentials list */
+.ess {
+  border: 1px solid var(--color-line);
+  border-radius: 14px;
+  background: var(--color-bg-inset);
+}
+
+.ess-summary {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 4px 12px;
+  padding: 14px 16px;
+  cursor: pointer;
+  list-style: none;
+}
+
+.ess-summary::-webkit-details-marker {
+  display: none;
+}
+
+.ess-summary::after {
+  content: 'Review';
+  color: var(--color-brand-primary);
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.ess[open] .ess-summary::after {
+  content: 'Done';
+}
+
+.ess-summary-label {
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--text);
+}
+
+.ess-summary-total {
+  flex: 1 1 auto;
+  color: var(--muted);
+  font-size: 14px;
+  font-variant-numeric: tabular-nums;
+}
+
+.ess-summary:focus-visible {
+  outline: none;
+  box-shadow: var(--focus-ring);
+  border-radius: 14px;
+}
+
+.ess-intro {
+  margin: 0;
+  padding: 0 16px 10px;
+  color: var(--muted);
+  font-size: 13px;
+  line-height: 1.5;
+}
+
+.ess-list {
+  margin: 0;
+  padding: 0 8px;
+  list-style: none;
+}
+
+.ess-item {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 150px;
+  align-items: center;
+  gap: 4px 10px;
+  padding: 8px;
+  border-top: 1px solid var(--color-line);
+}
+
+.ess-item.is-off .ess-name,
+.ess-item.is-off .ess-amount {
+  opacity: 0.45;
+}
+
+.ess-check {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-width: 0;
+  font-size: 14px;
+  cursor: pointer;
+}
+
+.ess-name {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.ess-tag {
+  flex-shrink: 0;
+  padding: 2px 7px;
+  border-radius: 999px;
+  background: var(--color-brand-tint);
+  color: var(--color-brand-primary);
+  font-size: 11px;
+  font-weight: 600;
+}
+
+.ess-amount .cell-input {
+  height: 40px;
+}
+
+.ess-meta {
+  grid-column: 2;
+  margin: 0;
+  color: var(--muted);
+  font-size: 12px;
+  text-align: right;
+}
+
+.ess-extra {
+  grid-template-columns: minmax(0, 1fr) 150px 32px;
+}
+
+.ess-extra-name {
+  height: 40px;
+}
+
+.ess-remove {
+  width: 32px;
+  height: 32px;
+  border: 0;
+  border-radius: 8px;
+  background: transparent;
+  color: var(--muted);
+  cursor: pointer;
+}
+
+.ess-remove:hover {
+  background: rgba(26, 26, 46, 0.06);
+  color: var(--text);
+}
+
+.ess-add {
+  margin: 4px 16px 14px;
+  padding: 8px 0;
+  border: 0;
+  background: none;
+  color: var(--color-brand-primary);
+  font-family: var(--font-family);
+  font-size: 14px;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.ess-add:focus-visible,
+.ess-remove:focus-visible {
+  outline: none;
+  box-shadow: var(--focus-ring);
+  border-radius: 8px;
+}
+
+/* Answer on hold for a missing exchange rate */
+.tool-empty[data-kind='hold'] {
+  border-color: #f3dfa6;
+  background: #fffaeb;
+}
+
+.tool-empty button.tool-empty-link {
+  border: 0;
+  font-family: var(--font-family);
+  cursor: pointer;
+}
+
+@media (max-width: 900px) {
+  .tool-scenarios {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .tool-scenario {
+    padding: 18px 16px;
+  }
+
+  .ess-item {
+    grid-template-columns: minmax(0, 1fr) 132px;
+  }
+
+  .ess-extra {
+    grid-template-columns: minmax(0, 1fr) 120px 32px;
+  }
+
+  .ess-amount .cell-input,
+  .ess-extra-name {
+    height: 44px;
+    font-size: 16px;
+  }
+}
+
+.ess-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 4px 16px 14px;
+}
+
+.ess-actions .ess-add {
+  margin: 0;
+}
+
+.ess-confirm {
+  min-height: 36px;
+  padding: 0 14px;
+  border: 1px solid var(--color-brand-tint-border);
+  border-radius: 999px;
+  background: var(--color-bg-surface);
+  color: var(--color-brand-primary);
+  font-family: var(--font-family);
+  font-size: 14px;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.ess-confirm:focus-visible {
+  outline: none;
+  box-shadow: var(--focus-ring);
+}
+
+/* Names never truncate: the "Suggested" tag sits under the name instead. */
+.ess-check {
+  align-items: flex-start;
+}
+
+.ess-check input {
+  margin-top: 1px;
+}
+
+.ess-check-text {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 3px;
+  min-width: 0;
+}
+
+.ess-name {
+  overflow: visible;
+  white-space: normal;
+  overflow-wrap: anywhere;
+  line-height: 1.35;
+}
