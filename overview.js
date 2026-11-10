@@ -41,60 +41,54 @@
   function render() {
     if (!last) return;
     const d = last;
+    const m = d.model;
     const p = PERIODS[getPeriod()];
     const k = p.factor;
     const code = d.incomeCode;
     const n = (x) => (Number.isFinite(x) ? x : 0);
 
-    const income = n(d.income);
-    const fixed = n(d.fixed);
-    const variable = n(d.variable);
-    const subs = n(d.subs);
+    // One definition everywhere: money left over = money in − money out.
+    // The savings & goals split is a plan, shown alongside, never taken off.
+    const income = n(m ? m.moneyIn.total : d.income);
+    const fixed = n(m ? m.moneyOut.fixed : d.fixed);
+    const variable = n(m ? m.moneyOut.variable : d.variable);
+    const subs = n(m ? m.moneyOut.subs : d.subs);
     const expenses = fixed + variable + subs;
-    const goals = n(d.goals);
-    const afterExpenses = income - expenses;
-    const left = afterExpenses - goals;
+    const planned = n(m ? m.planned.total : d.goals);
+    const left = income - expenses;
+    const ok = m ? m.ok : d.expensesOk;
+    const hasIncome = m ? m.complete.income && income > 0 : income > 0;
 
-    // Headline
     let state = '';
     let main;
     let sub = '';
-    if (income <= 0) {
-      main = 'Add your income to see your summary.';
-    } else if (!d.expensesOk) {
+    if (!hasIncome) {
+      main = 'Add the money you have coming in to see your summary.';
+    } else if (!ok) {
+      const which = m && m.missingRates.length ? m.missingRates.join(', ') : 'another currency';
       main = 'Waiting for exchange rates…';
-      sub = 'Some expenses are in another currency.';
-    } else if (afterExpenses < 0) {
-      state = 'bad';
-      main = `You’re spending ${money(afterExpenses * k, code)} more than you earn ${p.each}.`;
-      sub = 'Cut some expenses before setting money aside.';
+      sub = `Some amounts are in ${which}.`;
     } else if (left < 0) {
-      state = 'warn';
-      main = `Your savings & goals are ${money(left * k, code)} more than you have left ${p.each}.`;
-      sub = `After expenses you have ${money(afterExpenses * k, code)}. Lower a goal or trim a cost.`;
-    } else if (Math.round(left) === 0) {
-      state = 'good';
-      main = 'Every bit of your income has a job.';
-      sub = `${money(expenses * k, code)} on expenses and ${money(goals * k, code)} put aside ${p.each}.`;
+      state = 'bad';
+      main = `Your costs are ${money(left * k, code)} more than your money coming in ${p.each}.`;
     } else {
       state = 'good';
       main = `${money(left * k, code)} left over ${p.each}.`;
-      sub = `After ${money(expenses * k, code)} of expenses and ${money(goals * k, code)} for savings & goals.`;
+      sub = `${money(income * k, code)} coming in, ${money(expenses * k, code)} going out.`;
     }
     els.headline.dataset.state = state;
-    syncStrip({ income, expenses, goals, left, code });
+    syncStrip({ income, expenses, goals: planned, left, code, has: hasIncome && ok });
     els.main.textContent = main;
     els.sub.textContent = sub;
     els.sub.hidden = !sub;
 
-    // Rows: one number each, plus share of income.
     const rows = [
-      { label: 'Income', value: income, kind: 'income' },
-      { label: 'Fixed expenses', value: fixed, kind: 'fixed' },
-      { label: 'Variable expenses', value: variable, kind: 'variable' },
+      { label: 'Money coming in', value: income, kind: 'income' },
+      { label: 'Fixed costs', value: fixed, kind: 'fixed' },
+      { label: 'Variable costs', value: variable, kind: 'variable' },
       { label: 'Subscriptions', value: subs, kind: 'subs' },
-      { label: 'Savings & goals', value: goals, kind: 'goals' },
-      { label: left < 0 ? 'Short by' : 'Left over', value: left, kind: left < 0 ? 'short' : 'left' },
+      { label: left < 0 ? 'Short by' : 'Money left over', value: left, kind: left < 0 ? 'short' : 'left' },
+      { label: 'Planned for savings & goals', value: planned, kind: 'goals' },
     ];
     els.rows.innerHTML = '';
     for (const r of rows) {
@@ -109,7 +103,7 @@
         <div class="overview-bar"><span></span></div>`;
       li.querySelector('.overview-label').textContent = r.label;
       li.querySelector('.overview-value').textContent =
-        income > 0 || r.kind === 'income' ? `${r.value < 0 ? '−' : ''}${money(r.value * k, code)}` : '—';
+        (hasIncome && ok) || r.kind === 'income' ? `${r.value < 0 ? '−' : ''}${money(r.value * k, code)}` : '—';
       const bar = li.querySelector('.overview-bar');
       if (share == null) {
         bar.remove();
@@ -134,10 +128,9 @@
       Math.abs(n).toLocaleString('en-US', { notation: 'compact', maximumFractionDigits: 1 });
   }
 
-  function syncStrip({ income, expenses, goals, left, code }) {
+  function syncStrip({ income, expenses, goals, left, code, has }) {
     const strip = $('moneyStrip');
     if (!strip) return;
-    const has = income > 0;
     $('stripLabel').textContent = left < 0 ? 'Short this month' : 'Left over this month';
     $('stripRemaining').textContent = has ? `${left < 0 ? '−' : ''}${formatInCurrency(Math.abs(left), code)}` : '—';
     $('stripIncome').textContent = has ? compact(income, code) : '—';

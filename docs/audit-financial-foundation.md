@@ -82,3 +82,20 @@ One result layout everywhere, explanations, mobile and accessibility review, edg
 3. **Three cost groups.** Keep Fixed / Variable / Subscriptions and add the essential tick to each cost, or regroup as "Costs you must pay" / "Other spending"? Proposed: keep the groups (less disruption), add the tick, and show essentials vs other in results.
 4. **Interest in savings goals.** Proposed: off by default, simple annual rate on the balance, labelled "if your savings earn interest", no investment returns.
 5. **Calculators list after Phase 2.** Proposed: merge Spending breakdown, Savings capacity and Money snapshot into "Understand my money", leaving one tool per question.
+
+## 7. Decisions taken (10 Nov 2026)
+
+1. **Money left over = money in − money out.** What people plan to do with it is theirs to decide; the savings & goals split is shown, never subtracted.
+2. **Savings split unchanged** (including the "Expenses" row).
+3. **Cost groups unchanged.** No essential tick in the planner; costs get a hidden permanent id so essential choices survive renames. Yearly and 2-yearly costs use the frequency menu (spread monthly), not a new group.
+4. **Merge** Spending breakdown, Savings capacity and Money snapshot into "Understand my money" (Phase 2).
+
+## 8. Phase 1 status: done
+
+- `budgetModel()` and `compareModels()` in `budget-core.js`, with 17 tests (`tests/budget-model.test.js`). Summary, money strip, welcome card, planner tables and every calculator read it; calculators no longer read the page's input boxes.
+- One definition of money left over everywhere.
+- Take-home pay label and hint; optional **other money coming in** (amount, frequency, currency, reliable or not); **every 2 years** frequency; **your savings** card (money you can access + other savings), saved with each scenario and shared with the calculators.
+- Costs carry permanent ids; essential choices keyed by id (older name-keyed choices still apply).
+- Migrations: the calculators' old savings figure moves into the budget; old scenarios load unchanged.
+
+Not done in Phase 1 (moved to Phase 2): debt type on costs (debt is counted once as a cost today and suggested as essential); naming the missing currency inside the planner's own tables.

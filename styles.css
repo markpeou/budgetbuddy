@@ -2879,3 +2879,163 @@ body.sheet-open .tab-bar {
   color: #7a5b00;
   font-weight: 600;
 }
+
+/* Other money coming in (optional) */
+.other-income {
+  margin-top: 14px;
+  padding-top: 14px;
+  border-top: 1px solid var(--border);
+}
+
+.other-income-title {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 0;
+  font-size: 15px;
+  font-weight: 600;
+  color: var(--text);
+}
+
+.other-income-hint {
+  margin: 4px 0 8px;
+}
+
+.optional-tag {
+  padding: 2px 8px;
+  border-radius: 999px;
+  background: var(--color-bg-inset);
+  border: 1px solid var(--border);
+  color: var(--muted);
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0;
+  text-transform: none;
+}
+
+.other-income-list {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.other-income-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1.4fr) minmax(0, 1fr) 120px 110px auto 40px;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 0;
+}
+
+.other-income-row .cell-input {
+  height: 40px;
+}
+
+.oi-regular {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 13px;
+  color: var(--text);
+  white-space: nowrap;
+  cursor: pointer;
+}
+
+.oi-regular input {
+  width: 18px;
+  height: 18px;
+  accent-color: var(--color-brand-primary);
+}
+
+.link-btn {
+  padding: 8px 0;
+  border: 0;
+  background: none;
+  color: var(--color-brand-primary);
+  font-family: var(--font-family);
+  font-size: 14px;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.link-btn:focus-visible {
+  outline: none;
+  box-shadow: var(--shadow-focus);
+  border-radius: 6px;
+}
+
+/* Your savings (optional) */
+.savings-fields {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 16px;
+}
+
+.savings-input-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 110px;
+  gap: 8px;
+}
+
+.savings-input-row .cell-input {
+  height: 40px;
+}
+
+.savings-field .hint {
+  margin-top: 6px;
+}
+
+.card-savings .section-heading .optional-tag {
+  margin-left: 4px;
+}
+
+@media (max-width: 900px) {
+  .card-savings {
+    order: 1;
+  }
+
+  .other-income-row {
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) 40px;
+    padding: 10px 0;
+    border-top: 1px solid var(--border);
+  }
+
+  .other-income-row .oi-name {
+    grid-column: 1 / 3;
+  }
+
+  .other-income-row .btn-icon {
+    grid-column: 3;
+    grid-row: 1;
+  }
+
+  .other-income-row .money-input-wrap {
+    grid-column: 1 / 3;
+  }
+
+  .other-income-row .oi-freq {
+    grid-column: 1;
+  }
+
+  .other-income-row .oi-currency {
+    grid-column: 2;
+  }
+
+  .other-income-row .oi-regular {
+    grid-column: 1 / 4;
+  }
+
+  .other-income-row .cell-input {
+    height: 44px;
+    font-size: 16px;
+  }
+
+  .savings-fields {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .savings-input-row .cell-input {
+    height: 44px;
+    font-size: 16px;
+  }
+}

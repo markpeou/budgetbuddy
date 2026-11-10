@@ -12,8 +12,8 @@
       href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700&display=swap"
       rel="stylesheet"
     />
-    <link rel="stylesheet" href="./styles.css?v=20261110e" />
-    <link rel="stylesheet" href="./home.css?v=20261110e" />
+    <link rel="stylesheet" href="./styles.css?v=20261110k" />
+    <link rel="stylesheet" href="./home.css?v=20261110k" />
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
   </head>
   <body data-view="home">
@@ -311,7 +311,9 @@
         <h2>How the numbers work</h2>
         <ul>
           <li>Everything is converted to a monthly figure first. Weekly amounts are ×52÷12, fortnightly ×26÷12, quarterly ÷3 and yearly ÷12.</li>
-          <li>Left over is your monthly income minus your expenses, minus what you set aside for savings and goals.</li>
+          <li>Money left over is your money coming in (take-home pay plus any other money) minus your money going out. What you plan to do with it, like the savings &amp; goals split, is shown separately and never taken off.</li>
+          <li>Costs paid less often than monthly (quarterly, yearly, every 2 years) are spread across the months.</li>
+          <li>Money you can access counts towards how long your savings would last. Other savings or investments are kept separate.</li>
           <li>Savings &amp; goals are percentages of your income. The starting split (50% expenses, 30% long-term savings, 10% emergency fund, 10% investments) is only a suggestion until you change it.</li>
           <li>The journey calculators use the same figures. Essential costs are suggested from your budget (fixed costs plus necessities such as groceries and transport) and you confirm or change them. Each saved scenario keeps its own.</li>
           <li>Runway is your available funds ÷ (monthly spending − reliable income), counted from today. Uncertain payments are left out unless you include them. Dates assume spending and income stay the same; they’re estimates, not guarantees.</li>
@@ -402,7 +404,7 @@
         <div class="income-row mini-card">
           <div class="income-inputs income-inputs--inline">
             <div class="income-field-group">
-              <label class="field-label" for="salaryAmount">Amount</label>
+              <label class="field-label" for="salaryAmount">Take-home pay</label>
               <div class="money-input-wrap input-wrap">
                 <span class="money-symbol" id="salaryCurrencySymbol" aria-hidden="true">$</span>
                 <input
@@ -423,6 +425,7 @@
                   <option value="weekly">Weekly</option>
                   <option value="fortnightly">Fortnightly</option>
                   <option value="monthly" selected>Monthly</option>
+                  <option value="quarterly">Quarterly</option>
                   <option value="annually">Yearly</option>
                 </select>
               </div>
@@ -454,9 +457,49 @@
           </div>
         </div>
         <p class="hint" id="incomeHint">
-          Enter your salary amount and how often you are paid.
+          Your pay after tax: what lands in your account.
         </p>
+        <div class="other-income" id="otherIncome">
+          <h3 class="other-income-title">Other money coming in <span class="optional-tag">Optional</span></h3>
+          <p class="hint other-income-hint">A side job, rent from a room, family support. Tick “Reliable” if you can count on it.</p>
+          <ul class="other-income-list" id="otherIncomeList"></ul>
+          <button type="button" class="link-btn" id="addOtherIncome">+ Add other money coming in</button>
+        </div>
         <p class="hint rates-meta" id="ratesMeta">Loading exchange rates…</p>
+      </section>
+
+      <section class="card card-savings" data-panel="income" aria-labelledby="savingsTitle">
+        <h2 class="section-heading" id="savingsTitle">
+          <span class="icon-chip icon-chip--teal" aria-hidden="true">
+            <svg class="icon" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><use href="#icon-coins"/></svg>
+          </span>
+          Your savings <span class="optional-tag">Optional</span>
+        </h2>
+        <p class="hint">Used to work out how long your savings could last. Leave blank if you’re not sure.</p>
+        <div class="savings-fields">
+          <div class="savings-field">
+            <label class="field-label" for="savingsAccessible">Money you can access</label>
+            <div class="savings-input-row">
+              <div class="money-input-wrap input-wrap">
+                <span class="money-symbol" id="savingsAccessibleSymbol" aria-hidden="true">$</span>
+                <input id="savingsAccessible" class="cell-input" placeholder="0" aria-describedby="savingsAccessibleHint" />
+              </div>
+              <div class="input-wrap"><select id="savingsAccessibleCurrency" class="cell-input" aria-label="Currency of money you can access"></select></div>
+            </div>
+            <p class="hint" id="savingsAccessibleHint">Cash and savings you could use within a few days.</p>
+          </div>
+          <div class="savings-field">
+            <label class="field-label" for="savingsOther">Other savings or investments</label>
+            <div class="savings-input-row">
+              <div class="money-input-wrap input-wrap">
+                <span class="money-symbol" id="savingsOtherSymbol" aria-hidden="true">$</span>
+                <input id="savingsOther" class="cell-input" placeholder="0" aria-describedby="savingsOtherHint" />
+              </div>
+              <div class="input-wrap"><select id="savingsOtherCurrency" class="cell-input" aria-label="Currency of other savings"></select></div>
+            </div>
+            <p class="hint" id="savingsOtherHint">Kept separate. Not counted as money you can use straight away.</p>
+          </div>
+        </div>
       </section>
 
       <section class="card card-expenses" data-panel="expenses">
@@ -1003,14 +1046,14 @@
     </nav>
 
     <script src="./icons.js"></script>
-    <script src="./budget-core.js?v=20261110e"></script>
-    <script src="./journey-core.js?v=20261110e"></script>
-    <script src="./script.js?v=20261110e"></script>
-    <script src="./receipt-core.js?v=20261110e"></script>
-    <script src="./receipts.js?v=20261110e"></script>
-    <script src="./nav.js?v=20261110e"></script>
-    <script src="./overview.js?v=20261110e"></script>
-    <script src="./journeys.js?v=20261110e"></script>
-    <script src="./home.js?v=20261110e"></script>
+    <script src="./budget-core.js?v=20261110k"></script>
+    <script src="./journey-core.js?v=20261110k"></script>
+    <script src="./script.js?v=20261110k"></script>
+    <script src="./receipt-core.js?v=20261110k"></script>
+    <script src="./receipts.js?v=20261110k"></script>
+    <script src="./nav.js?v=20261110k"></script>
+    <script src="./overview.js?v=20261110k"></script>
+    <script src="./journeys.js?v=20261110k"></script>
+    <script src="./home.js?v=20261110k"></script>
   </body>
 </html>

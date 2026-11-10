@@ -17,6 +17,7 @@
   if (!J) return;
 
   const STORE_KEY = 'budgetBuddyTools_v1';
+  let current = null; // the calculator on screen: { id, presetKey }
   const $ = (id) => document.getElementById(id);
 
   // ---------------------------------------------------------------------------
@@ -48,7 +49,11 @@
   let lastBudget = null;
   document.addEventListener('budget:recompute', (e) => {
     lastBudget = e.detail;
-    if (current) render();
+    if (!current) return;
+    // Typing in a calculator field can update the budget (e.g. savings):
+    // refresh the answer without rebuilding the field being typed in.
+    const typing = document.activeElement && document.activeElement.closest && document.activeElement.closest('#toolFields');
+    render(!typing);
   });
 
   function code() {
@@ -72,51 +77,37 @@
     return v;
   }
 
-  /** Planner expense rows as monthly amounts in the income currency. */
+  /** Costs as monthly amounts in the income currency, from the shared model. */
   function budgetRows() {
-    const out = [];
-    const kinds = [
-      ['fixedExpensesBody', 'fixed'],
-      ['variableExpensesBody', 'variable'],
-      ['subscriptionsBody', 'subs'],
-    ];
-    kinds.forEach(([id, kind]) => {
-      const tbody = $(id);
-      if (!tbody) return;
-      tbody.querySelectorAll('tr.expense-row').forEach((tr) => {
-        const name = (tr.querySelector('.expense-name-input') || {}).value || '';
-        const amt = parseAmount((tr.querySelector('.expense-amount-input') || {}).value || '');
-        const freq = (tr.querySelector('.expense-freq-select') || {}).value || 'monthly';
-        const cur = (tr.querySelector('.expense-currency-select') || {}).value || code();
-        if (!(amt > 0)) return;
-        // NaN when the rate is missing: kept, so it can't silently drop out.
-        out.push({ name, monthly: toCode(frequencyToMonthly(amt, freq), cur), kind, currency: cur });
-      });
-    });
-    return out;
+    const m = lastBudget && lastBudget.model;
+    if (!m) return [];
+    // Unconverted costs stay in the list as NaN so they can't silently drop out.
+    if (!m.ok) m.missingRates.forEach((c) => missingRates.add(c));
+    if (m.converted) convertedSomething = true;
+    return m.moneyOut.items.map((i) => ({ id: i.id, name: i.name, kind: i.kind, currency: i.currency, monthly: i.monthly }));
   }
 
   function splitMonthly(id) {
-    if (typeof currentSplits === 'undefined' || !lastBudget) return 0;
-    const s = currentSplits.find((x) => x.id === id);
-    return s ? (lastBudget.income || 0) * (Number(s.percent) || 0) / 100 : 0;
+    const m = lastBudget && lastBudget.model;
+    if (!m) return 0;
+    const item = m.planned.items.find((x) => x.id === id);
+    return item && Number.isFinite(item.monthly) ? item.monthly : 0;
   }
 
   function budget() {
-    const b = lastBudget || {};
-    const n = (x) => (Number.isFinite(x) ? x : 0);
-    // The planner couldn't convert some costs: totals are unknown, not zero.
-    const ok = b.expensesOk !== false;
-    if (!ok) budgetRows(); // records which currencies are missing
-    const m = (x) => (ok ? n(x) : NaN);
-    const fixed = m(b.fixed);
-    const expenses = fixed + m(b.variable) + m(b.subs);
+    const m = lastBudget && lastBudget.model;
+    if (!m) return { has: false, income: 0, fixed: 0, expenses: 0, goals: 0, savings: 0, emergencyMonthly: 0, savingsMonthly: 0 };
+    // Missing rates: totals are unknown (not zero), and the answer goes on hold.
+    if (!m.ok) m.missingRates.forEach((c) => missingRates.add(c));
+    if (m.converted) convertedSomething = true;
+    const v = (x) => (m.ok && Number.isFinite(x) ? x : m.ok ? 0 : NaN);
     return {
-      has: n(b.income) > 0 || !ok || expenses > 0,
-      income: n(b.income),
-      fixed,
-      expenses,
-      goals: n(b.goals),
+      has: m.complete.income || m.complete.costs,
+      income: v(m.moneyIn.total),
+      fixed: v(m.moneyOut.fixed),
+      expenses: v(m.moneyOut.total),
+      goals: v(m.planned.total),
+      savings: v(m.savings.accessible),
       emergencyMonthly: splitMonthly('emergency'),
       savingsMonthly: splitMonthly('savings'),
     };
@@ -141,6 +132,14 @@
   function saveEss() {
     if (window.BudgetEssentials) window.BudgetEssentials.changed();
     else saveStore();
+  }
+
+  // One-off move: the savings figure used to live only in the calculators.
+  if (window.BudgetSavings && store.values && store.values.savings && !window.BudgetSavings.get()) {
+    const old = store.values.savings;
+    if (old && Number(old.v) > 0) window.BudgetSavings.set(old.v, old.c);
+    delete store.values.savings;
+    saveStore();
   }
 
   // One-off move: choices made before essentials were saved per scenario.
@@ -177,11 +176,12 @@
     essentials: () => ({ value: essentialsTotal(), label: 'your essentials list' }),
     emergencyMonthly: () => ({ value: budget().emergencyMonthly, label: 'your Emergency fund split' }),
     goalMonthly: () => ({ value: budget().savingsMonthly, label: 'your Long-term savings split' }),
-    emergencySaved: () => ({ value: savedValue('savings'), label: 'your savings balance' }),
+    emergencySaved: () => ({ value: budget().savings, label: 'your savings' }),
+    savings: () => ({ value: budget().savings, label: 'your budget' }),
   };
 
   const FIELDS = {
-    savings: { label: 'Savings available now', type: 'money', help: 'Used by every calculator.' },
+    savings: { label: 'Money you can access now', type: 'money', source: 'savings', help: 'Saved with your budget and used by every calculator.' },
     confirmedMoney: { label: 'Confirmed money coming', type: 'money', help: 'Only what you’ve been told you’ll get, e.g. final pay or leave payout.' },
     uncertainMoney: { label: 'Uncertain or estimated money', type: 'money', help: 'Left out of the results unless you include it.' },
     includeUncertain: { label: 'Include uncertain money in the results', type: 'toggle' },
@@ -223,6 +223,11 @@
   }
 
   function setValue(key, v) {
+    // Savings live in the budget (Income tab), so every page and scenario agrees.
+    if (key === 'savings' && window.BudgetSavings) {
+      window.BudgetSavings.set(v, code());
+      return;
+    }
     store.values = store.values || {};
     if (v == null || v === '') delete store.values[key];
     else store.values[key] = { v, c: FIELDS[key].type === 'money' ? code() : undefined };
@@ -693,7 +698,6 @@
   // Rendering
   // ---------------------------------------------------------------------------
 
-  let current = null; // { id, presetKey }
 
   function el(tag, cls, text) {
     const n = document.createElement(tag);
@@ -710,6 +714,7 @@
 
   function fieldHint(key) {
     const f = FIELDS[key];
+    if (key === 'savings') return { text: f.help };
     const own = savedValue(key);
     if (f.source) {
       const src = SOURCES[f.source]();

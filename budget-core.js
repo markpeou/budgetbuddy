@@ -33,6 +33,8 @@
       case 'annually':
       case 'yearly':
         return n / 12;
+      case 'biennially':
+        return n / 24;
       default:
         return n;
     }
@@ -48,9 +50,13 @@
         return (n * 26) / 52;
       case 'monthly':
         return (n * 12) / 52;
+      case 'quarterly':
+        return (n * 4) / 52;
       case 'annually':
       case 'yearly':
         return n / 52;
+      case 'biennially':
+        return n / 104;
       default:
         return 0;
     }
@@ -215,6 +221,7 @@
 
     const withCurrency = (rows) =>
       (rows || []).map((r) => ({
+        ...(r.id ? { id: r.id } : {}),
         name: r.name || '',
         frequency: r.frequency || 'monthly',
         amount: r.amount !== undefined && r.amount !== '' ? r.amount : '',
@@ -530,7 +537,173 @@
     return toHundred(splits.map((s) => Number(s.percent) || 0));
   }
 
+  // ---------------------------------------------------------------------------
+  // The shared budget model: one calculation every page reads
+  // ---------------------------------------------------------------------------
+
+  // Names that usually mean a necessity, or usually mean a choice. Only used to
+  // *suggest* whether a cost is essential; the user's choice always wins.
+  const ESSENTIAL_WORDS = /\b(rent|mortgage|housing|strata|council|grocer\w*|supermarket|food|electric\w*|power|energy|gas|water|utilit\w*|internet|wifi|broadband|phone|mobile|transport|commut\w*|bus|train|metro|fuel|petrol|diesel|parking|toll\w*|health\w*|medical|doctor|dentist|pharmac\w*|medicine|prescription\w*|insurance|child ?care|daycare|school|tuition|loan|debt|repayment\w*|tax|household|toiletr\w*|baby|nappies|diapers)\b/i;
+  const CHOICE_WORDS = /\b(gym|netflix|spotify|disney|streaming|music|tv|entertainment|dining|restaurant\w*|takeaway|take-away|cafe|coffee|bar|drinks|alcohol|holiday\w*|travel|shopping|clothes|hobby|hobbies|games?|gaming|subscription\w*)\b/i;
+
+  function suggestEssential(name, kind) {
+    const n = String(name || '');
+    if (CHOICE_WORDS.test(n)) return false;
+    if (ESSENTIAL_WORDS.test(n)) return true;
+    return kind === 'fixed';
+  }
+
+  /** Key for a cost's essential choice: its permanent id, else (older data) its name. */
+  function essentialKey(row) {
+    return row && row.id ? `id:${row.id}` : `${(row && row.kind) || 'other'}:${String((row && row.name) || '').trim().toLowerCase()}`;
+  }
+  function legacyEssentialKey(row) {
+    return `${row.kind || 'other'}:${String(row.name || '').trim().toLowerCase()}`;
+  }
+
+  const LESS_THAN_MONTHLY = ['quarterly', 'annually', 'yearly', 'biennially'];
+  // Whole cents; never −0 (which would show as "−$0").
+  const round2 = (x) => {
+    const r = Math.round(x * 100) / 100;
+    return r === 0 ? 0 : r;
+  };
+
+  /**
+   * Turn saved budget data (the scenario / draft shape) into monthly figures
+   * in one currency. Never guesses: if a rate is missing, totals are null and
+   * `missingRates` names the currencies.
+   *
+   *   moneyIn    take-home pay + other money coming in (regular / not regular)
+   *   moneyOut   all costs, by group, essential vs other, and the share that
+   *              comes from bills paid less often than monthly (spread monthly)
+   *   leftOver   moneyIn − moneyOut (planned savings are NOT taken off)
+   *   planned    what the savings & goals split sets aside — a plan, not savings
+   *   savings    money you can access, and other savings/investments (kept apart)
+   */
+  function budgetModel(data, opts = {}) {
+    const d = data || {};
+    const rates = opts.rates || null;
+    const target = opts.currency || d.incomeCurrency || 'USD';
+    const missing = [];
+    let converted = false; // any amount converted from another currency (rates matter)
+    const conv = (amount, code) => {
+      const n = Number(amount);
+      if (!Number.isFinite(n) || n === 0) return 0;
+      const v = convert(n, code || target, target, rates);
+      if (!Number.isFinite(v)) {
+        if (!missing.includes(code)) missing.push(code);
+        return NaN;
+      }
+      if ((code || target) !== target) converted = true;
+      return v;
+    };
+    const amt = (x) => {
+      const n = typeof x === 'string' ? Number(x.replace(/[^0-9.\-]/g, '')) : Number(x);
+      return Number.isFinite(n) && n > 0 ? n : 0;
+    };
+
+    // Money coming in
+    const salaryAmount = amt(d.salaryAmount);
+    const salary = conv(incomeNormalized(salaryAmount, d.salaryFrequency || 'monthly').perMonth, d.incomeCurrency || target);
+    let regular = 0;
+    let irregular = 0;
+    const otherIncome = (d.otherIncome || []).map((r) => {
+      const monthly = conv(frequencyToMonthly(amt(r.amount), r.frequency || 'monthly'), r.currency || target);
+      const isRegular = r.regular !== false;
+      if (isRegular) regular += monthly;
+      else irregular += monthly;
+      return { id: r.id, name: String(r.name || '').trim() || 'Other money', monthly, regular: isRegular, currency: r.currency || target };
+    }).filter((r) => r.monthly !== 0);
+
+    // Money going out
+    const choices = (d.essentials && d.essentials.items) || {};
+    const items = [];
+    const groups = { fixed: 0, variable: 0, subs: 0 };
+    let spread = 0;
+    [['fixed', d.fixed], ['variable', d.variable], ['subs', d.subs]].forEach(([kind, rows]) => {
+      (rows || []).forEach((r) => {
+        const a = amt(r.amount);
+        if (!a) return;
+        const frequency = r.frequency || 'monthly';
+        const monthly = conv(frequencyToMonthly(a, frequency), r.currency || d.expenseCurrency || target);
+        const row = { id: r.id || null, name: String(r.name || '').trim() || 'Unnamed cost', kind, frequency, currency: r.currency || target, monthly };
+        const c = choices[essentialKey(row)] || choices[legacyEssentialKey(row)] || {};
+        row.essential = typeof c.on === 'boolean' ? c.on : suggestEssential(row.name, kind);
+        row.essentialConfirmed = typeof c.on === 'boolean';
+        groups[kind] += monthly;
+        if (LESS_THAN_MONTHLY.includes(frequency)) spread += monthly;
+        items.push(row);
+      });
+    });
+
+    // Savings (actual balances, not the plan)
+    const sv = d.savings || {};
+    const accessible = sv.accessible ? conv(amt(sv.accessible.amount), sv.accessible.currency || target) : 0;
+    const otherSavings = sv.other ? conv(amt(sv.other.amount), sv.other.currency || target) : 0;
+
+    const ok = missing.length === 0;
+    const sum = (xs) => xs.reduce((a, b) => a + b, 0);
+    const inTotal = salary + regular + irregular;
+    const outTotal = groups.fixed + groups.variable + groups.subs;
+    const essential = sum(items.filter((i) => i.essential).map((i) => i.monthly));
+    const val = (x) => (ok ? round2(x) : null);
+    const hasIncome = salaryAmount > 0 || otherIncome.length > 0;
+
+    // The plan: what the split sets aside, from money coming in.
+    const splits = Array.isArray(d.splits) ? d.splits : [];
+    const plannedItems = splits
+      .filter((sp) => sp.kind !== 'expenses')
+      .map((sp) => ({ id: sp.id, label: sp.label, percent: Number(sp.percent) || 0, monthly: val(inTotal * (Number(sp.percent) || 0) / 100) }));
+
+    return {
+      ok,
+      missingRates: missing,
+      converted,
+      currency: target,
+      complete: { income: hasIncome, costs: items.length > 0 },
+      moneyIn: {
+        salary: val(salary),
+        regular: val(salary + regular),
+        notRegular: val(irregular),
+        total: val(inTotal),
+        other: otherIncome,
+      },
+      moneyOut: {
+        fixed: val(groups.fixed),
+        variable: val(groups.variable),
+        subs: val(groups.subs),
+        total: val(outTotal),
+        essential: val(essential),
+        other: val(outTotal - essential),
+        spread: val(spread),
+        items,
+      },
+      // Can't say what's left without knowing what comes in.
+      leftOver: ok && hasIncome ? round2(inTotal - outTotal) : null,
+      leftOverYear: ok && hasIncome ? round2((inTotal - outTotal) * 12) : null,
+      planned: { total: ok ? round2(sum(plannedItems.map((p) => p.monthly))) : null, items: plannedItems },
+      savings: { accessible: val(accessible), other: val(otherSavings) },
+    };
+  }
+
+  /** Difference between two models, for comparing scenarios (b − a). */
+  function compareModels(a, b) {
+    const diff = (x, y) => (x == null || y == null ? null : round2(y - x));
+    return {
+      ok: Boolean(a && b && a.ok && b.ok),
+      moneyIn: diff(a.moneyIn.total, b.moneyIn.total),
+      moneyOut: diff(a.moneyOut.total, b.moneyOut.total),
+      leftOver: diff(a.leftOver, b.leftOver),
+      leftOverYear: diff(a.leftOverYear, b.leftOverYear),
+    };
+  }
+
   return {
+    budgetModel,
+    compareModels,
+    suggestEssential,
+    essentialKey,
+    LESS_THAN_MONTHLY,
     DEFAULT_SPLITS,
     balanceSplits,
     normalizeSplits,

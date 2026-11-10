@@ -358,11 +358,12 @@
       card.hidden = true;
       return;
     }
-    const left = income - (d.fixed || 0) - (d.variable || 0) - (d.subs || 0) - (d.goals || 0);
+    // Same definition as the Summary: money in − money out.
+    const left = d.model && d.model.leftOver != null ? d.model.leftOver : income - (d.fixed || 0) - (d.variable || 0) - (d.subs || 0);
     const sel = $('scenarioLoadSelect');
     const name = sel && sel.value && sel.selectedOptions[0] ? sel.selectedOptions[0].textContent : 'Your budget';
     $('welcomeBackName').textContent = name;
-    $('welcomeBackFigure').textContent = d.expensesOk === false
+    $('welcomeBackFigure').textContent = d.expensesOk === false || (d.model && !d.model.ok)
       ? ''
       : left >= 0
         ? `${formatInCurrency(left, d.incomeCode)} left over a month`

@@ -212,26 +212,11 @@
   // Essential costs: suggested from the budget, always confirmable by the user
   // ---------------------------------------------------------------------------
 
-  // Names that usually mean a necessity, or usually mean a choice. Only used to
-  // *suggest*; the user's tick always wins.
-  const ESSENTIAL_WORDS = /\b(rent|mortgage|housing|strata|council|grocer\w*|supermarket|food|electric\w*|power|energy|gas|water|utilit\w*|internet|wifi|broadband|phone|mobile|transport|commut\w*|bus|train|metro|fuel|petrol|diesel|parking|toll\w*|health\w*|medical|doctor|dentist|pharmac\w*|medicine|prescription\w*|insurance|child ?care|daycare|school|tuition|loan|debt|repayment\w*|tax|household|toiletr\w*|baby|nappies|diapers)\b/i;
-  const CHOICE_WORDS = /\b(gym|netflix|spotify|disney|streaming|music|tv|entertainment|dining|restaurant\w*|takeaway|take-away|cafe|coffee|bar|drinks|alcohol|holiday\w*|travel|shopping|clothes|hobby|hobbies|games?|gaming|subscription\w*)\b/i;
-
-  /**
-   * Is this cost probably essential? Fixed costs lean yes, variable costs and
-   * subscriptions lean no, and the name can tip either way.
-   */
-  function suggestEssential(name, kind) {
-    const n = String(name || '');
-    if (CHOICE_WORDS.test(n)) return false;
-    if (ESSENTIAL_WORDS.test(n)) return true;
-    return kind === 'fixed';
-  }
-
-  /** Stable key for a budget row so a user's choice survives edits elsewhere. */
-  function essentialKey(row) {
-    return `${row.kind || 'other'}:${String(row.name || '').trim().toLowerCase()}`;
-  }
+  // Suggestions and keys come from the shared budget model (budget-core.js).
+  const BC = typeof module === 'object' && module.exports ? require('./budget-core.js') : (typeof self !== 'undefined' ? self : this).BudgetCore;
+  const suggestEssential = (name, kind) => BC.suggestEssential(name, kind);
+  const essentialKey = (row) => BC.essentialKey(row);
+  const legacyKey = (row) => `${row.kind || 'other'}:${String(row.name || '').trim().toLowerCase()}`;
 
   /**
    * The essentials list and its total.
@@ -243,7 +228,7 @@
     const choices = saved.items || {};
     const items = (rows || []).map((r) => {
       const key = essentialKey(r);
-      const c = choices[key] || {};
+      const c = choices[key] || choices[legacyKey(r)] || {};
       const suggested = suggestEssential(r.name, r.kind);
       const budgetAmount = Number(r.monthly);
       const edited = c.amount != null && Number.isFinite(Number(c.amount));

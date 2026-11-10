@@ -64,6 +64,20 @@ const totalBudgetedAltEl = document.getElementById('totalBudgetedAlt');
 const splitValidationHintEl = document.getElementById('splitValidationHint');
 const budgetSplitBody = document.getElementById('budgetSplitBody');
 const addSplitCategoryBtn = document.getElementById('addSplitCategoryBtn');
+// Other money coming in, and savings (see the bottom of this file).
+const otherIncomeList = document.getElementById('otherIncomeList');
+const FREQ_OPTIONS = [
+  ['weekly', 'Weekly'],
+  ['fortnightly', 'Fortnightly'],
+  ['monthly', 'Monthly'],
+  ['quarterly', 'Quarterly'],
+  ['annually', 'Yearly'],
+];
+const savingsEls = {
+  accessible: [document.getElementById('savingsAccessible'), document.getElementById('savingsAccessibleCurrency'), document.getElementById('savingsAccessibleSymbol')],
+  other: [document.getElementById('savingsOther'), document.getElementById('savingsOtherCurrency'), document.getElementById('savingsOtherSymbol')],
+};
+
 
 const fixedExpensesBody = document.getElementById('fixedExpensesBody');
 const variableExpensesBody = document.getElementById('variableExpensesBody');
@@ -566,11 +580,11 @@ function updateCurrencyHeaders() {
 
   if (incomeHintEl) {
     if (!currenciesDiffer()) {
-      incomeHintEl.textContent = `Enter your pay in ${incomeMeta.name} (${incomeCode}). Each expense can use its own currency.`;
+      incomeHintEl.textContent = `Your pay after tax, in ${incomeMeta.name} (${incomeCode}): what lands in your account.`;
     } else if (isAutoReporting()) {
-      incomeHintEl.textContent = `Enter your pay in ${incomeMeta.name} (${incomeCode}). Totals show in ${reportingMeta.name} (${reportingCode}), ${autoReporting.share > 0 ? 'where most of your expenses are' : 'the currency where you are'}.`;
+      incomeHintEl.textContent = `Your pay after tax, in ${incomeMeta.name} (${incomeCode}). Costs total in ${reportingMeta.name} (${reportingCode}), ${autoReporting.share > 0 ? 'where most of them are' : 'the currency where you are'}.`;
     } else {
-      incomeHintEl.textContent = `Enter your pay in ${incomeMeta.name} (${incomeCode}). Totals show in ${reportingMeta.name} (${reportingCode}).`;
+      incomeHintEl.textContent = `Your pay after tax, in ${incomeMeta.name} (${incomeCode}). Costs total in ${reportingMeta.name} (${reportingCode}).`;
     }
   }
 
@@ -761,9 +775,15 @@ function updateIncome() {
   };
 }
 
+function newId(prefix = 'c') {
+  return typeof crypto !== 'undefined' && crypto.randomUUID ? crypto.randomUUID() : `${prefix}-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+}
+
 function createExpenseRow(tbody, defaults = {}) {
   const tr = document.createElement('tr');
   tr.className = 'expense-row';
+  // A permanent id, so choices about this cost (e.g. essential) survive renames.
+  tr.dataset.rowId = defaults.id || newId();
 
   const defaultCurrency =
     (defaults.currency && isSupportedCurrency(defaults.currency)
@@ -796,6 +816,7 @@ function createExpenseRow(tbody, defaults = {}) {
     <option value="monthly" selected>Monthly</option>
     <option value="quarterly">Quarterly</option>
     <option value="annually">Yearly</option>
+    <option value="biennially">Every 2 years</option>
   `;
   if (defaults.frequency) {
     const f = defaults.frequency === 'yearly' ? 'annually' : defaults.frequency;
@@ -1574,8 +1595,16 @@ function formatAggTotal(agg) {
 
 function recomputeAll() {
   resolveAutoReporting();
-  const { perMonth: incomePerMonth, perMonthVnd: incomePerMonthVnd } = updateIncome();
+  const salary = updateIncome();
   const incomeCode = getIncomeCurrency();
+  // Money coming in = take-home pay + other money coming in (shared model),
+  // so the split, tables and Summary all use the same total.
+  const model = getBudgetModel();
+  const otherIn = model && model.ok && Number.isFinite(model.moneyIn.total) && Number.isFinite(model.moneyIn.salary)
+    ? model.moneyIn.total - model.moneyIn.salary
+    : 0;
+  const incomePerMonth = salary.perMonth + otherIn;
+  const incomePerMonthVnd = otherIn ? toVnd(incomePerMonth, incomeCode) : salary.perMonthVnd;
   const reportingCode = getReportingCurrency();
 
   const fixedAgg = aggregateTable(fixedExpensesBody);
@@ -1673,6 +1702,7 @@ function recomputeAll() {
   document.dispatchEvent(
     new CustomEvent('budget:recompute', {
       detail: {
+        model,
         incomeCode,
         expensesOk,
         income: incomePerMonth,
@@ -1866,6 +1896,7 @@ function collectScenarioData() {
       const amtInput = tr.querySelector('.expense-amount-input');
       if (!nameInput || !freqSelect || !amtInput) return;
       out.push({
+        id: tr.dataset.rowId,
         name: nameInput.value,
         frequency: freqSelect.value,
         amount: amtInput.value,
@@ -1886,6 +1917,8 @@ function collectScenarioData() {
     subs: rowsFrom(subscriptionsBody),
     splits: currentSplits.map((s) => ({ ...s })),
     essentials: cloneEssentials(scenarioEssentials),
+    otherIncome: collectOtherIncome(),
+    savings: collectSavings(),
   };
 }
 
@@ -2053,6 +2086,8 @@ function applyScenarioData(rawData) {
   if (!data) return;
   // Each scenario has its own essentials; older scenarios start from suggestions.
   scenarioEssentials = cloneEssentials(rawData && rawData.essentials);
+  renderOtherIncome((rawData && rawData.otherIncome) || []);
+  applySavings((rawData && rawData.savings) || null);
 
   salaryAmountInput.value = data.salaryAmount ?? '';
   if (salaryAmountInput.formatAmountValue) salaryAmountInput.formatAmountValue();
@@ -2074,6 +2109,7 @@ function applyScenarioData(rawData) {
     if (rows && rows.length) {
       rows.forEach((r) => {
         createExpenseRow(tbody, {
+          id: r.id,
           name: r.name || '',
           frequency: r.frequency || 'monthly',
           currency: r.currency || expenseCode,
@@ -2136,6 +2172,7 @@ function seedDefaultRows() {
 }
 
 populateCurrencySelects();
+initSavingsFields();
 renderBudgetSplits();
 initScenarioUI();
 
@@ -2238,6 +2275,15 @@ function canonicalBudget(raw) {
     rows: [rows(d.fixed), rows(d.variable), rows(d.subs)],
     splits: (d.splits || []).map((x) => [String(x.label || '').trim(), Number(x.percent) || 0]),
     ess: canonicalEssentials(raw && raw.essentials),
+    other: ((raw && raw.otherIncome) || [])
+      .map((r) => [String(r.name || '').trim(), parseAmount(r.amount), r.frequency || 'monthly', r.currency || '', r.regular !== false])
+      .filter((r) => r[0] || r[1]),
+    sav: [
+      parseAmount(raw && raw.savings && raw.savings.accessible && raw.savings.accessible.amount),
+      (raw && raw.savings && raw.savings.accessible && raw.savings.accessible.currency) || '',
+      parseAmount(raw && raw.savings && raw.savings.other && raw.savings.other.amount),
+      (raw && raw.savings && raw.savings.other && raw.savings.other.currency) || '',
+    ],
   });
 }
 
@@ -2389,3 +2435,177 @@ if (scenarioSaveBtn) {
 // Last chance before the tab closes.
 window.addEventListener('pagehide', saveDraftNow);
 updateSavePrompt();
+
+// ---------------------------------------------------------------------------
+// Other money coming in (optional): side jobs, rent from a room, support.
+// "Reliable" means you can count on it; the rest is shown as an estimate.
+// ---------------------------------------------------------------------------
+
+
+function otherIncomeRow(r = {}) {
+  const li = document.createElement('li');
+  li.className = 'other-income-row';
+  li.dataset.id = r.id || newId('i');
+
+  const name = document.createElement('input');
+  name.type = 'text';
+  name.className = 'cell-input oi-name';
+  name.placeholder = 'e.g. Side job';
+  name.setAttribute('aria-label', 'What it is');
+  name.value = r.name || '';
+
+  const amountWrap = document.createElement('div');
+  amountWrap.className = 'money-input-wrap input-wrap';
+  const sym = document.createElement('span');
+  sym.className = 'money-symbol';
+  sym.setAttribute('aria-hidden', 'true');
+  const amount = document.createElement('input');
+  amount.className = 'cell-input oi-amount';
+  amount.placeholder = '0';
+  amount.setAttribute('aria-label', 'Amount');
+  amountWrap.append(sym, amount);
+
+  const freq = document.createElement('select');
+  freq.className = 'cell-input oi-freq';
+  freq.setAttribute('aria-label', 'How often');
+  FREQ_OPTIONS.forEach(([v, t]) => freq.add(new Option(t, v)));
+  freq.value = r.frequency || 'monthly';
+
+  const cur = document.createElement('select');
+  cur.className = 'cell-input oi-currency';
+  cur.setAttribute('aria-label', 'Currency');
+  populateCurrencySelectOptions(cur, r.currency || getIncomeCurrency(), { short: true });
+
+  const reg = document.createElement('label');
+  reg.className = 'oi-regular';
+  const cb = document.createElement('input');
+  cb.type = 'checkbox';
+  cb.checked = r.regular !== false;
+  reg.append(cb, document.createTextNode(' Reliable'));
+
+  const rm = document.createElement('button');
+  rm.type = 'button';
+  rm.className = 'btn-icon';
+  rm.setAttribute('aria-label', 'Remove');
+  rm.innerHTML = icon('trash', { size: 16, className: 'icon icon--sm' });
+  rm.addEventListener('click', () => {
+    li.remove();
+    recomputeAll();
+    scheduleDraftSave();
+  });
+
+  const syncSymbol = () => {
+    sym.textContent = getCurrencyMeta(cur.value).symbol;
+  };
+  attachAmountInputFormatting(amount, () => getCurrencyMeta(cur.value).decimals);
+  if (r.amount) {
+    amount.value = String(parseAmount(r.amount));
+    amount.formatAmountValue();
+  }
+  syncSymbol();
+  cur.addEventListener('change', () => {
+    syncSymbol();
+    if (amount.formatAmountValue) amount.formatAmountValue();
+  });
+  [name, amount].forEach((el) => el.addEventListener('input', recomputeAll));
+  [freq, cur, cb].forEach((el) => el.addEventListener('change', recomputeAll));
+
+  li.append(name, amountWrap, freq, cur, reg, rm);
+  return li;
+}
+
+function renderOtherIncome(rows) {
+  if (!otherIncomeList) return;
+  otherIncomeList.innerHTML = '';
+  (rows || []).forEach((r) => otherIncomeList.appendChild(otherIncomeRow(r)));
+}
+
+function collectOtherIncome() {
+  if (!otherIncomeList) return [];
+  return [...otherIncomeList.querySelectorAll('.other-income-row')].map((li) => ({
+    id: li.dataset.id,
+    name: li.querySelector('.oi-name').value,
+    amount: li.querySelector('.oi-amount').value,
+    frequency: li.querySelector('.oi-freq').value,
+    currency: li.querySelector('.oi-currency').value,
+    regular: li.querySelector('.oi-regular input').checked,
+  }));
+}
+
+const addOtherIncomeBtn = document.getElementById('addOtherIncome');
+if (addOtherIncomeBtn) {
+  addOtherIncomeBtn.addEventListener('click', () => {
+    const li = otherIncomeRow({});
+    otherIncomeList.appendChild(li);
+    li.querySelector('.oi-name').focus();
+  });
+}
+
+// ---------------------------------------------------------------------------
+// Your savings (optional): money you can access, and other savings kept apart.
+// Shared with every calculator through window.BudgetSavings.
+// ---------------------------------------------------------------------------
+
+
+function initSavingsFields() {
+  Object.values(savingsEls).forEach(([input, cur, sym]) => {
+    if (!input || !cur) return;
+    populateCurrencySelectOptions(cur, getIncomeCurrency(), { short: true });
+    attachAmountInputFormatting(input, () => getCurrencyMeta(cur.value).decimals);
+    const sync = () => {
+      sym.textContent = getCurrencyMeta(cur.value).symbol;
+    };
+    sync();
+    cur.addEventListener('change', () => {
+      sync();
+      if (input.formatAmountValue) input.formatAmountValue();
+      recomputeAll();
+    });
+    input.addEventListener('input', recomputeAll);
+  });
+}
+
+function collectSavings() {
+  const one = ([input, cur]) => (input && input.value.trim() ? { amount: input.value, currency: cur.value } : null);
+  return { accessible: one(savingsEls.accessible), other: one(savingsEls.other) };
+}
+
+function applySavings(sv) {
+  [['accessible', sv && sv.accessible], ['other', sv && sv.other]].forEach(([k, v]) => {
+    const [input, cur, sym] = savingsEls[k];
+    if (!input || !cur) return;
+    cur.value = (v && v.currency) || getIncomeCurrency();
+    sym.textContent = getCurrencyMeta(cur.value).symbol;
+    input.value = v && v.amount ? String(parseAmount(v.amount)) : '';
+    if (input.value && input.formatAmountValue) input.formatAmountValue();
+  });
+}
+
+window.BudgetSavings = {
+  /** Money you can access, as {amount:number, currency} or null. */
+  get: () => {
+    const [input, cur] = savingsEls.accessible;
+    return input && input.value.trim() ? { amount: parseAmount(input.value), currency: cur.value } : null;
+  },
+  /** Set from a calculator (in that calculator's currency). */
+  set: (amount, currency) => {
+    const [input, cur, sym] = savingsEls.accessible;
+    if (!input) return;
+    if (amount == null || amount === '') {
+      input.value = '';
+    } else {
+      cur.value = currency || getIncomeCurrency();
+      sym.textContent = getCurrencyMeta(cur.value).symbol;
+      input.value = String(amount);
+      if (input.formatAmountValue) input.formatAmountValue();
+    }
+    recomputeAll();
+    scheduleDraftSave();
+  },
+};
+
+/** The shared model of the current budget (see budget-core.js budgetModel). */
+function getBudgetModel() {
+  return Core && Core.budgetModel ? Core.budgetModel(collectScenarioData(), { rates: vndRatesCache }) : null;
+}
+window.getBudgetModel = getBudgetModel;
