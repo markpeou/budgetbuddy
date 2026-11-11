@@ -310,6 +310,11 @@
 
   function money(n, cur = code()) {
     const meta = getCurrencyMeta(cur);
+    // Past a trillion, show 6 significant figures: the rest is floating-point noise.
+    if (Math.abs(n) >= 1e12) {
+      const f = Math.pow(10, Math.floor(Math.log10(Math.abs(n))) - 5);
+      n = Math.round(n / f) * f;
+    }
     const abs = Math.abs(n);
     const digits = abs >= 100 || abs === 0 ? 0 : meta.decimals;
     const gap = /[A-Za-z]$/.test(meta.symbol) ? ' ' : '';
@@ -726,7 +731,13 @@
         jobloss: { q: 'What would happen if I lost my job?', fields: ['savings', 'confirmedMoney', 'uncertainMoney', 'includeUncertain', 'incomeDuring', 'expenses', 'essentialsList'], twoScenarios: true },
       },
       answer(p, preset) {
-        return preset.twoScenarios === 'break' ? twoScenarioBreak(p, preset) : twoScenarioRunway();
+        const a = preset.twoScenarios === 'break' ? twoScenarioBreak(p, preset) : twoScenarioRunway();
+        if (!a.empty) {
+          a.next = p === 'timeoff' || p === 'leave'
+            ? { label: 'How long will it take me to save for something?', href: '#tool/goal' }
+            : { label: 'How much should I keep for emergencies?', href: '#tool/emergency' };
+        }
+        return a;
       },
     },
 
@@ -928,7 +939,9 @@
           main: `In ${yrs} you could have about ${money(g.balance)}.`,
           sub: tooMuch
             ? `Adding ${money(value('investContribution'))} ${each} is more than your money left over (${money(Math.max(0, left))} a month).`
-            : `You’d put in ${money(g.contributed)}. Growth could add about ${money(g.growth)}.`,
+            : g.growth >= 0.5
+              ? `You’d put in ${money(g.contributed)}. Growth could add about ${money(g.growth)}.`
+              : `That’s what you’d put in, with no growth at ${ret}%${fee ? ` after fees` : ''}.`,
           state: tooMuch ? 'warn' : 'good',
           figures: fig,
           behindTitle: 'How we worked it out',
@@ -1044,7 +1057,8 @@
         const extra = Number(value('loanExtra')) || 0;
         const lump = Number(value('loanLump')) || 0;
         if (!(balance > 0)) return { empty: { title: 'How much is left on your loan?', text: 'Enter the amount still owed below.' }, noBudgetLink: true };
-        if (!rate) return { empty: { title: 'What’s your interest rate?', text: 'Enter it below. It’s on your loan statement or app.' }, noBudgetLink: true };
+        const typedRate = value('loanRate');
+        if (typedRate == null || typedRate === '') return { empty: { title: 'What’s your interest rate?', text: 'Enter it below. It’s on your loan statement or app.' }, noBudgetLink: true };
         const x = J.extraRepayment({ balance, annualRate: rate, payment: value('loanPayment'), years: value('loanYears'), extra, lumpSum: lump });
         if (x.paymentFrom === 'none') return { empty: { title: 'What do you repay each month?', text: 'Enter your monthly repayment, or the years left on the loan.' }, noBudgetLink: true };
         const pay = x.payment;
@@ -1092,7 +1106,7 @@
         const left = leftOverNow();
         if (extra && left != null && extra > left + 0.5) meaning.unshift(`${money(extra)} a month is more than your money left over (${money(Math.max(0, left))} a month).`);
         return {
-          main: ok ? `Paying ${how} extra could save about ${yearsMonths(x.monthsSaved)} and ${money(x.interestSaved)} in interest.` : `Paying ${how} extra.`,
+          main: ok ? `Paying ${how} extra could save about ${yearsMonths(x.monthsSaved)}${x.interestSaved >= 0.5 ? ` and ${money(x.interestSaved)} in interest` : ''}.` : `Paying ${how} extra.`,
           state: ok ? 'good' : '',
           scenarios: [
             { title: 'As you pay now', ...card(x.base, pay) },
@@ -1830,30 +1844,128 @@
     return `${sym}${/[A-Za-z]$/.test(sym) ? ' ' : ''}${t}`;
   };
 
+  // Motion: bars grow up from the baseline one after another; lines draw from
+  // left to right. When a figure changes, the chart glides to the new values
+  // instead of redrawing. It starts once the chart is on screen, and is
+  // skipped for people who ask for less motion.
+  const reduceMotion = () => window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+  const ease = (t) => 1 - Math.pow(1 - t, 3);
+  const ENTER_MS = 700;
+  const STAGGER_MS = 35;
+  const TWEEN_MS = 420;
+  let chartState = null; // { key, shown: values on screen, raf, observer }
+
   function renderChart(c) {
     const wrap = $('toolChart');
     if (!wrap) return;
-    wrap.innerHTML = '';
-    wrap.hidden = !c;
-    if (!c) return;
-    wrap.appendChild(el('h3', 'tool-chart-title', c.title));
-    const legend = el('ul', 'tool-chart-legend');
-    c.series.forEach((s, i) => {
-      const li = el('li', `is-s${i}`);
-      li.appendChild(el('span', 'tool-chart-key'));
-      li.appendChild(document.createTextNode(s.name));
-      legend.appendChild(li);
-    });
-    wrap.appendChild(legend);
+    if (chartState && chartState.raf) cancelAnimationFrame(chartState.raf);
+    if (chartState && chartState.observer) chartState.observer.disconnect();
+    if (!c) {
+      wrap.innerHTML = '';
+      wrap.hidden = true;
+      chartState = null;
+      return;
+    }
+    wrap.hidden = false;
+    const key = `${c.kind}|${c.title}|${c.series.map((x) => x.name).join('|')}`;
+    const target = c.series.map((x) => x.values.slice());
+    const same = chartState && chartState.key === key;
 
-    // Drawn at the size it's shown, so text stays 12px on any screen.
+    if (!same) {
+      wrap.innerHTML = '';
+      wrap.appendChild(el('h2', 'tool-chart-title', c.title));
+      const legend = el('ul', 'tool-chart-legend');
+      c.series.forEach((x, i) => {
+        const li = el('li', `is-s${i}`);
+        li.appendChild(el('span', 'tool-chart-key'));
+        li.appendChild(document.createTextNode(x.name));
+        legend.appendChild(li);
+      });
+      wrap.appendChild(legend);
+      const box = el('div', 'tool-chart-box');
+      wrap.appendChild(box);
+    } else {
+      // Legend names can change with the amounts ("Paying A$650").
+      wrap.querySelectorAll('.tool-chart-legend li').forEach((li, i) => {
+        if (c.series[i]) li.lastChild.textContent = c.series[i].name;
+      });
+    }
+    const box = wrap.querySelector('.tool-chart-box');
     const W = Math.max(280, Math.round(wrap.clientWidth - 40) || 640);
     const H = W < 500 ? 200 : 260;
-    const pad = { l: 52, r: 8, t: 8, b: 26 };
+    const geo = { W, H, pad: { l: 52, r: 8, t: 8, b: 26 } };
+    const maxOf = (vals) => Math.max(1, ...c.labels.map((_, i) => (c.kind === 'stack' ? vals.reduce((a, s) => a + Math.max(0, s[i] || 0), 0) : Math.max(0, ...vals.map((s) => s[i] || 0)))));
+    const targetMax = maxOf(target);
+    const state = { key, shown: same ? chartState.shown : null, raf: null, observer: null };
+    chartState = state;
+
+    const finish = () => {
+      state.shown = target;
+      drawChart(box, c, target, targetMax, geo, { interactive: true });
+    };
+    if (reduceMotion()) return finish();
+
+    if (same && state.shown) {
+      // Glide from what's on screen to the new figures.
+      const from = state.shown;
+      const fromMax = maxOf(from);
+      const t0 = performance.now();
+      const step = (now) => {
+        const k = ease(Math.min(1, (now - t0) / TWEEN_MS));
+        const vals = target.map((s, si) => s.map((v, i) => {
+          const a = from[si] && from[si][i];
+          if (v == null) return null;
+          if (a == null) return c.kind === 'stack' ? v * k : v;
+          return a + (v - a) * k;
+        }));
+        state.shown = vals;
+        drawChart(box, c, vals, fromMax + (targetMax - fromMax) * k, geo, {});
+        if (k < 1) state.raf = requestAnimationFrame(step);
+        else finish();
+      };
+      state.raf = requestAnimationFrame(step);
+      return;
+    }
+
+    // First appearance: hold at the start until the chart is on screen.
+    const start = () => {
+      const n = c.labels.length;
+      const total = c.kind === 'stack' ? ENTER_MS + STAGGER_MS * (n - 1) : ENTER_MS + 200;
+      const t0 = performance.now();
+      const step = (now) => {
+        const ms = now - t0;
+        if (c.kind === 'stack') {
+          const vals = target.map((s) => s.map((v, i) => (v == null ? null : v * ease(Math.max(0, Math.min(1, (ms - STAGGER_MS * i) / ENTER_MS))))));
+          state.shown = vals;
+          drawChart(box, c, vals, targetMax, geo, {});
+        } else {
+          drawChart(box, c, target, targetMax, geo, { reveal: ease(Math.min(1, ms / (ENTER_MS + 200))) });
+        }
+        if (ms < total) state.raf = requestAnimationFrame(step);
+        else finish();
+      };
+      state.raf = requestAnimationFrame(step);
+    };
+    const zero = target.map((s) => s.map((v) => (v == null ? null : 0)));
+    if (c.kind === 'stack') drawChart(box, c, zero, targetMax, geo, {});
+    else drawChart(box, c, target, targetMax, geo, { reveal: 0 });
+    state.shown = c.kind === 'stack' ? zero : target;
+    if ('IntersectionObserver' in window) {
+      state.observer = new IntersectionObserver((entries) => {
+        if (!entries.some((e) => e.isIntersecting)) return;
+        state.observer.disconnect();
+        state.observer = null;
+        start();
+      }, { threshold: 0.35 });
+      state.observer.observe(box);
+    } else start();
+  }
+
+  /** One frame of the chart. `reveal` (0–1) uncovers lines from the left. */
+  function drawChart(box, c, vals, max, geo, { interactive = false, reveal = 1 }) {
+    const { W, H, pad } = geo;
     const n = c.labels.length;
     const stacked = c.kind === 'stack';
-    const totals = c.labels.map((_, i) => (stacked ? c.series.reduce((a, s) => a + s.values[i], 0) : Math.max(...c.series.map((s) => s.values[i] || 0))));
-    const max = Math.max(1, ...totals);
     const y = (v) => pad.t + (H - pad.t - pad.b) * (1 - v / max);
     const colW = (W - pad.l - pad.r) / n;
     const x = (i) => pad.l + colW * i + colW / 2;
@@ -1867,36 +1979,51 @@
       t.textContent = shortMoney(v);
       chart.appendChild(t);
     });
-    // X labels: thin out so they never collide.
+    // X labels: thinned to fit, never colliding with the last one.
     const every = Math.ceil(n / Math.max(2, Math.floor((W - pad.l) / 52)));
+    const labelled = (i) => i === n - 1 || (i % every === 0 && !(i && n - 1 - i < every));
     c.labels.forEach((l, i) => {
-      if (i % every && i !== n - 1) return;
-      if (i !== n - 1 && i % every === 0 && n - 1 - i < every && i) return; // too close to the last label
+      if (!labelled(i)) return;
       const t = svg('text', { x: x(i), y: H - 8, class: 'tool-chart-axis', 'text-anchor': 'middle' });
       t.textContent = l;
       chart.appendChild(t);
     });
 
+    const totals = c.labels.map((_, i) => vals.reduce((a, s) => a + Math.max(0, s[i] || 0), 0));
     if (stacked) {
       const bw = Math.max(2, Math.min(28, colW - 4));
       c.labels.forEach((_, i) => {
         let base = 0;
-        c.series.forEach((s, si) => {
-          const v = Math.max(0, s.values[i]);
+        vals.forEach((s, si) => {
+          const v = Math.max(0, s[i] || 0);
           if (v <= 0) return;
           const top = y(base + v);
           const h = Math.max(0, y(base) - top - (base > 0 ? 2 : 0)); // 2px gap between segments
-          chart.appendChild(svg('rect', { x: x(i) - bw / 2, y: top, width: bw, height: h, rx: si === c.series.length - 1 ? 3 : 0, class: `tool-chart-bar is-s${si}` }));
+          chart.appendChild(svg('rect', { x: x(i) - bw / 2, y: top, width: bw, height: h, rx: si === vals.length - 1 ? 3 : 0, class: `tool-chart-bar is-s${si}` }));
           base += v;
         });
       });
     } else {
-      c.series.forEach((s, si) => {
-        const pts = s.values.map((v, i) => (v == null ? null : `${x(i)},${y(v)}`)).filter(Boolean);
-        chart.appendChild(svg('polyline', { points: pts.join(' '), class: `tool-chart-line is-s${si}` }));
+      const clipId = `chartClip${Math.random().toString(36).slice(2, 8)}`;
+      if (reveal < 1) {
+        const defs = svg('defs');
+        const cp = svg('clipPath', { id: clipId });
+        cp.appendChild(svg('rect', { x: 0, y: 0, width: pad.l + (W - pad.l) * reveal, height: H }));
+        defs.appendChild(cp);
+        chart.appendChild(defs);
+      }
+      vals.forEach((s, si) => {
+        const pts = s.map((v, i) => (v == null ? null : `${x(i)},${y(v)}`)).filter(Boolean);
+        const line = svg('polyline', { points: pts.join(' '), class: `tool-chart-line is-s${si}` });
+        if (reveal < 1) line.setAttribute('clip-path', `url(#${clipId})`);
+        chart.appendChild(line);
       });
     }
     chart.appendChild(svg('line', { x1: pad.l, x2: W - pad.r, y1: y(0), y2: y(0), class: 'tool-chart-base' }));
+
+    box.innerHTML = '';
+    box.appendChild(chart);
+    if (!interactive) return;
 
     // Hover/focus: one hit column per year, bigger than the marks.
     const tip = el('div', 'tool-chart-tip');
@@ -1904,21 +2031,22 @@
     const cross = svg('line', { y1: pad.t, y2: H - pad.b, class: 'tool-chart-cross', visibility: 'hidden' });
     chart.appendChild(cross);
     c.labels.forEach((l, i) => {
-      const hit = svg('rect', { x: pad.l + colW * i, y: pad.t, width: colW, height: H - pad.t - pad.b, class: 'tool-chart-hit', tabindex: i % every === 0 || i === n - 1 ? '0' : '-1' });
+      const hit = svg('rect', { x: pad.l + colW * i, y: pad.t, width: colW, height: H - pad.t - pad.b, class: 'tool-chart-hit', tabindex: labelled(i) ? '0' : '-1' });
+      const label = c.tipLabel ? c.tipLabel(i) : l;
+      hit.setAttribute('aria-label', `${label}: ${c.series.map((s, si) => (vals[si][i] == null ? null : `${s.name} ${money(vals[si][i])}`)).filter(Boolean).join(', ')}`);
       const showTip = () => {
         tip.innerHTML = '';
-        tip.appendChild(el('strong', '', c.tipLabel ? c.tipLabel(i) : l));
+        tip.appendChild(el('strong', '', label));
         c.series.forEach((s, si) => {
-          if (s.values[i] == null) return;
+          if (vals[si][i] == null) return;
           const row = el('span', `is-s${si}`);
           row.appendChild(el('span', 'tool-chart-key'));
-          row.appendChild(document.createTextNode(`${s.name}: ${money(s.values[i])}`));
+          row.appendChild(document.createTextNode(`${s.name}: ${money(vals[si][i])}`));
           tip.appendChild(row);
         });
         if (stacked) tip.appendChild(el('span', 'tool-chart-tip-total', `Total: ${money(totals[i])}`));
         tip.hidden = false;
-        const left = (x(i) / W) * 100;
-        tip.style.left = `${Math.min(70, Math.max(0, left - 15))}%`;
+        tip.style.left = `${Math.min(70, Math.max(0, (x(i) / W) * 100 - 15))}%`;
         cross.setAttribute('x1', x(i));
         cross.setAttribute('x2', x(i));
         cross.setAttribute('visibility', 'visible');
@@ -1933,10 +2061,7 @@
       hit.addEventListener('blur', hide);
       chart.appendChild(hit);
     });
-    const box = el('div', 'tool-chart-box');
-    box.appendChild(chart);
     box.appendChild(tip);
-    wrap.appendChild(box);
   }
 
   /** "Could I afford to take six months off?" follows the length chosen. */
@@ -2011,6 +2136,8 @@
     }
     if (!TOOLS[id]) return false;
     current = { id, presetKey: TOOLS[id].presets[presetKey] ? presetKey : 'default' };
+    // A new page: its chart animates in from the start.
+    renderChart(null);
     // Seed preset defaults the user hasn't set (e.g. six months off → 6).
     const preset = presetOf(id, current.presetKey);
     Object.entries(preset.defaults).forEach(([k, v]) => {

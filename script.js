@@ -1559,6 +1559,9 @@ function updateChart({
     Math.max(remainingAfterAll, 0),
   ];
 
+  // The chart library comes from a CDN: if it's blocked or offline, skip the
+  // doughnut rather than stop the planner (and its autosave) from starting.
+  if (typeof Chart === 'undefined') return;
   if (!chartInstance) {
     const canvas = document.getElementById('spendingChart');
     if (!canvas) return;

@@ -127,3 +127,13 @@ Still to decide or do: debt type on costs (kept out because the cost groups stay
 - Compare scenarios: two saved scenarios (or the budget now) side by side in the income currency, with differences and the biggest cost changes. `BudgetScenarios.model` keeps other income, savings and essentials alongside the migrated data.
 
 **Still open:** multiple debts (avalanche vs snowball), offset accounts, debt as a cost type.
+
+## 11. Phase 4 status: done
+
+- **Charts move:** bars grow from the baseline one after another, lines draw left to right, and changes glide to the new figures. Starts when the chart is on screen; off for people who ask for less motion (`prefers-reduced-motion`). Charts are drawn at their real size so text stays 12px.
+- **One result layout:** the planner Summary now has "What this means" and a next step, like every calculator; job loss and time off have next steps.
+- **Accessibility (scripted check of every page at 320px and 1280px):** muted text darkened to pass 4.5:1 on every surface; nav links readable on the grey planner background; teal buttons and the "100%" total darkened for contrast; scenario name field labelled; chart heading order fixed; chart years reachable by keyboard with spoken values. Every focus stop shows a focus ring.
+- **Mobile:** no sideways scrolling on any page at 320px, including very long VND amounts (tables wrap, cover targets stack).
+- **Edge cases:** huge values show 6 significant figures (no floating-point noise); 0% loans and 0% returns read naturally; junk and negative input ask for a valid figure.
+- **Robustness:** the planner no longer breaks (or stops autosaving) if the chart library can't load; the library is pinned to a fixed version.
+- **User test script:** `docs/user-test-script.md`.

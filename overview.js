@@ -116,6 +116,50 @@
       }
       els.rows.appendChild(li);
     }
+    renderMeaning({ m, ok, hasIncome, income, expenses, planned, left, k, p, code });
+  }
+
+  // ---------------------------------------------------------------------------
+  // What this means, and one next step (same shape as every calculator)
+  // ---------------------------------------------------------------------------
+
+  function renderMeaning({ m, ok, hasIncome, income, expenses, planned, left, k, p, code }) {
+    const wrap = $('overviewMeaning');
+    const list = $('overviewMeaningList');
+    const next = $('overviewNext');
+    if (!wrap || !list || !next) return;
+    const lines = [];
+    const show = hasIncome && ok && m;
+    if (show) {
+      if (left >= 0 && planned > 0) {
+        lines.push(planned <= left + 0.5
+          ? `Your savings & goals plan (${money(planned * k, code)} ${p.each}) fits within what’s left over.`
+          : `Your savings & goals plan is ${money((planned - left) * k, code)} ${p.each} more than what’s left over.`);
+      }
+      const ess = m.moneyOut.essential;
+      if (income > 0 && ess > 0) lines.push(`${Math.round((ess / income) * 100)}% of your money coming in goes on costs you must pay.`);
+      if (m.moneyIn.notRegular > 0) lines.push(`${money(m.moneyIn.notRegular * k, code)} ${p.each} of it isn’t regular, so this is an estimate.`);
+      if (m.moneyOut.spread > 0) lines.push(`Includes ${money(m.moneyOut.spread * k, code)} ${p.each} set aside for bills you pay less often.`);
+    }
+    list.innerHTML = '';
+    lines.slice(0, 3).forEach((t) => {
+      const li = document.createElement('li');
+      li.textContent = t;
+      list.appendChild(li);
+    });
+    wrap.hidden = !lines.length;
+    // Next step: a safety net first, then where the money goes.
+    next.hidden = !show;
+    if (show) {
+      const hasNet = m.savings.accessible > 0 && expenses > 0 && m.savings.accessible >= m.moneyOut.essential * 3;
+      const step = left < 0
+        ? { href: '#tool/understand', text: 'See where your money goes' }
+        : hasNet
+          ? { href: '#tool/goal', text: 'How long will it take me to save for something?' }
+          : { href: '#tool/emergency', text: 'How much should I keep for emergencies?' };
+      next.href = step.href;
+      $('overviewNextText').textContent = step.text;
+    }
   }
 
   // ---------------------------------------------------------------------------

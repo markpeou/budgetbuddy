@@ -17,7 +17,7 @@
 
   /* Text */
   --color-text-primary: #1a1a2e;
-  --color-text-muted: #6b7280;
+  --color-text-muted: #596170; /* 4.5:1+ on every surface we use */
   --color-text-on-brand: #ffffff;
 
   /* Borders & shadows */
@@ -30,7 +30,7 @@
   --color-danger: #dc2626;
   --color-danger-soft: #fee2e2;
   --color-danger-hover-bg: #fecaca;
-  --color-success: #059669;
+  --color-success: #047857;
   --color-success-soft: #ecfdf5;
   /* Charts: validated pair (CVD ΔE 27.5); teal is relieved by labels + table */
   --chart-1: #7b14ef;
@@ -725,12 +725,12 @@ td .money-input-wrap {
 }
 
 .btn-soft {
-  background: var(--color-accent-teal);
+  background: #00796b; /* teal dark enough for white text (5.3:1) */
   color: var(--color-text-on-brand);
 }
 
 .btn-soft:hover {
-  background: var(--color-accent-teal-hover);
+  background: #00695c;
 }
 
 .btn-icon {
@@ -3041,4 +3041,9 @@ body.sheet-open .tab-bar {
     height: 44px;
     font-size: 16px;
   }
+}
+
+/* Charts never wider than their card (also before Chart.js loads) */
+canvas {
+  max-width: 100%;
 }

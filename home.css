@@ -75,7 +75,7 @@ body:not([data-view='app']) {
 .site-nav a {
   padding: 8px 14px;
   border-radius: 999px;
-  color: var(--muted);
+  color: #4b5563; /* also readable on the grey planner background */
   font-size: 14px;
   font-weight: 500;
   text-decoration: none;
@@ -2051,9 +2051,11 @@ body:not([data-view='app']) {
   flex: 1 1 auto;
 }
 
-/* Four cover options wrap neatly; goal modes read as words */
-.tool-targets {
-  grid-template-columns: repeat(4, minmax(0, 1fr));
+/* Four cover options in a row on wider screens; one per line on phones */
+@media (min-width: 901px) {
+  .tool-targets {
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+  }
 }
 
 .tool-choice--wrap {
@@ -2258,5 +2260,53 @@ body:not([data-view='app']) {
   }
   .tool-table--wide thead th {
     font-size: 11px;
+  }
+  /* Very long amounts (e.g. VND) wrap inside their column */
+  .tool-table--wide {
+    table-layout: fixed;
+  }
+  .tool-table--wide th,
+  .tool-table--wide td {
+    overflow-wrap: anywhere;
+  }
+  .tool-table--wide th:first-child {
+    width: 34%;
+  }
+}
+
+/* Phase 4: the Summary follows the calculator layout */
+.overview-meaning {
+  margin-top: 14px;
+  padding: 14px 16px;
+}
+
+.overview-meaning h3 {
+  margin: 0 0 6px;
+  font-size: 14px;
+  font-weight: 700;
+}
+
+.overview-meaning li {
+  font-size: 14px;
+}
+
+.overview-meaning[hidden],
+.overview-next[hidden] {
+  display: none;
+}
+
+.overview-next {
+  margin-top: 12px;
+}
+
+/* Less motion: no transitions on anything that moves */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
   }
 }

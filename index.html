@@ -12,9 +12,9 @@
       href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700&display=swap"
       rel="stylesheet"
     />
-    <link rel="stylesheet" href="./styles.css?v=20261111a" />
-    <link rel="stylesheet" href="./home.css?v=20261111a" />
-    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <link rel="stylesheet" href="./styles.css?v=20261111c" />
+    <link rel="stylesheet" href="./home.css?v=20261111c" />
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
   </head>
   <body data-view="home">
     <svg xmlns="http://www.w3.org/2000/svg" class="icon-sprite" aria-hidden="true">
@@ -392,6 +392,7 @@
             <div class="input-wrap scenario-name-wrap">
               <input
                 id="scenarioNameInput"
+                aria-label="Scenario name"
                 type="text"
                 class="cell-input"
                 placeholder="Scenario name"
@@ -726,6 +727,15 @@
               <p class="overview-headline-sub" id="overviewHeadlineSub"></p>
             </div>
             <ul class="overview-rows" id="overviewRows"></ul>
+            <section class="tool-meaning overview-meaning" id="overviewMeaning" aria-labelledby="overviewMeaningTitle" hidden>
+              <h3 id="overviewMeaningTitle">What this means</h3>
+              <ul id="overviewMeaningList"></ul>
+            </section>
+            <a class="tool-next overview-next" id="overviewNext" href="#tool/emergency" hidden>
+              <span class="tool-next-label">Next step</span>
+              <span class="tool-next-text" id="overviewNextText"></span>
+              <span aria-hidden="true">→</span>
+            </a>
           </div>
 
           <div class="save-prompt" id="savePrompt" hidden>
@@ -1064,14 +1074,14 @@
     </nav>
 
     <script src="./icons.js"></script>
-    <script src="./budget-core.js?v=20261111a"></script>
-    <script src="./journey-core.js?v=20261111a"></script>
-    <script src="./script.js?v=20261111a"></script>
-    <script src="./receipt-core.js?v=20261111a"></script>
-    <script src="./receipts.js?v=20261111a"></script>
-    <script src="./nav.js?v=20261111a"></script>
-    <script src="./overview.js?v=20261111a"></script>
-    <script src="./journeys.js?v=20261111a"></script>
-    <script src="./home.js?v=20261111a"></script>
+    <script src="./budget-core.js?v=20261111c"></script>
+    <script src="./journey-core.js?v=20261111c"></script>
+    <script src="./script.js?v=20261111c"></script>
+    <script src="./receipt-core.js?v=20261111c"></script>
+    <script src="./receipts.js?v=20261111c"></script>
+    <script src="./nav.js?v=20261111c"></script>
+    <script src="./overview.js?v=20261111c"></script>
+    <script src="./journeys.js?v=20261111c"></script>
+    <script src="./home.js?v=20261111c"></script>
   </body>
 </html>
