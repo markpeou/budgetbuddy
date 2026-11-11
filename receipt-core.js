@@ -25,6 +25,7 @@
     { id: 'entertainment', label: 'Entertainment', color: '#EC4899' },
     { id: 'travel', label: 'Travel & stays', color: '#14B8A6' },
     { id: 'personal', label: 'Personal care', color: '#A855F7' },
+    { id: 'housing', label: 'Rent & home loan', color: '#6366F1' },
     { id: 'other', label: 'Other', color: '#9CA3AF' },
   ];
 
@@ -163,6 +164,7 @@
       'benh vien', 'dental', 'nha khoa', 'medical', 'doctor',
     ],
     personal: ['salon', 'spa', 'hair', 'toc', 'nail', 'barber', 'massage', 'cat toc'],
+    housing: ['rent', 'mortgage', 'home loan', 'strata', 'real estate', 'body corporate', 'lease', 'tien nha', 'thue nha'],
     bills: [
       'electric', 'dien luc', 'water', 'nuoc', 'internet', 'mobile', 'telecom',
       'utility', 'insurance', 'bao hiem',

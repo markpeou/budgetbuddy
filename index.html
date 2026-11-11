@@ -12,8 +12,8 @@
       href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700&display=swap"
       rel="stylesheet"
     />
-    <link rel="stylesheet" href="./styles.css?v=20261111c" />
-    <link rel="stylesheet" href="./home.css?v=20261111c" />
+    <link rel="stylesheet" href="./styles.css?v=20261111e" />
+    <link rel="stylesheet" href="./home.css?v=20261111e" />
     <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
   </head>
   <body data-view="home">
@@ -133,6 +133,7 @@
       <symbol id="icon-plane" viewBox="0 0 24 24"><path d="M17.8 19.2 16 11l3.5-3.5C21 6 21.5 4 21 3c-1-.5-3 0-4.5 1.5L13 8 4.8 6.2c-.5-.1-.9.1-1.1.5l-.3.5c-.2.5-.1 1 .3 1.3L9 12l-2 3H4l-1 1 3 2 2 3 1-1v-3l3-2 3.5 5.3c.3.4.8.5 1.3.3l.5-.2c.4-.3.6-.7.5-1.2z"/></symbol>
       <symbol id="icon-columns" viewBox="0 0 24 24"><rect width="18" height="18" x="3" y="3" rx="2"/><path d="M12 3v18"/></symbol>
       <symbol id="icon-sprout" viewBox="0 0 24 24"><path d="M7 20h10"/><path d="M10 20c5.5-2.5.8-6.4 3-10"/><path d="M9.5 9.4c1.1.8 1.8 2.2 2.3 3.7-2 .4-3.5.4-4.8-.3-1.2-.6-2.3-1.9-3-4.2 2.8-.5 4.4 0 5.5.8z"/><path d="M14.1 6a7 7 0 0 0-1.1 4c1.9-.1 3.3-.6 4.3-1.4 1-1 1.6-2.3 1.7-4.6-2.7.1-4 1-4.9 2z"/></symbol>
+      <symbol id="icon-file-text" viewBox="0 0 24 24"><path d="M15 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7Z"/><path d="M14 2v4a2 2 0 0 0 2 2h4"/><path d="M10 9H8"/><path d="M16 13H8"/><path d="M16 17H8"/></symbol>
       <symbol id="icon-lock" viewBox="0 0 24 24"><rect width="18" height="11" x="3" y="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></symbol>
     </svg>
 
@@ -906,12 +907,12 @@
           <span class="icon-chip icon-chip--purple" aria-hidden="true">
             <svg class="icon" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><use href="#icon-camera"/></svg>
           </span>
-          Actual spending — receipts
+          What you actually spend
         </h2>
         <p class="hint receipt-privacy">
           <svg class="icon icon--sm" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><use href="#icon-shield"/></svg>
-          Snap or upload a receipt. The photo is read once and never stored —
-          only the date, merchant, amount, currency and category are kept, in this browser.
+          Snap a receipt when you buy, or add your bank statement once a month. Photos and files are read once and never stored.
+          Only the date, place, amount, currency and category are kept, in this browser.
         </p>
 
         <div class="receipt-capture mini-card">
@@ -990,6 +991,62 @@
             <button type="button" id="rvDiscard" class="btn btn-ghost">Discard</button>
           </div>
         </form>
+
+        <div class="statement-card mini-card" id="statementCard">
+          <div class="statement-head">
+            <span class="icon-chip icon-chip--teal" aria-hidden="true">
+              <svg class="icon" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><use href="#icon-file-text"/></svg>
+            </span>
+            <div>
+              <p class="statement-title">Add a month in one go</p>
+              <p class="hint">Download your bank statement as a CSV from your bank’s app or website, then add it here. Every purchase is added at once. The file is read on this device and never uploaded.</p>
+            </div>
+          </div>
+          <div class="statement-actions">
+            <label class="btn receipt-upload-btn">
+              <svg class="icon icon--sm" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><use href="#icon-upload"/></svg>
+              Add bank statement (CSV)
+              <input id="statementFileInput" type="file" accept=".csv,text/csv,text/plain,application/vnd.ms-excel" hidden />
+            </label>
+            <button type="button" class="btn btn-ghost" id="checkinBtn">
+              <svg class="icon icon--sm" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><use href="#icon-calendar"/></svg>
+              Monthly reminder
+            </button>
+          </div>
+          <p class="receipt-status" id="statementStatus" aria-live="polite"></p>
+        </div>
+
+        <section class="statement-review mini-card" id="statementReview" aria-labelledby="statementReviewTitle" hidden>
+          <h3 class="statement-title" id="statementReviewTitle">Check before adding</h3>
+          <p class="statement-summary" id="statementSummary"></p>
+          <div class="statement-options">
+            <label class="field-label" for="statementCurrency">Statement currency</label>
+            <div class="input-wrap"><select id="statementCurrency" class="cell-input"></select></div>
+            <button type="button" class="tool-reset" id="statementFlip">Purchases showing as money in? Swap them</button>
+          </div>
+          <ul class="statement-list" id="statementList"></ul>
+          <div class="receipt-review-actions">
+            <button type="button" class="btn" id="statementAdd">Add</button>
+            <button type="button" class="btn btn-ghost" id="statementCancel">Cancel</button>
+          </div>
+        </section>
+
+        <section class="month-plan mini-card" id="monthPlan" aria-labelledby="monthPlanTitle" hidden>
+          <div class="month-plan-head">
+            <h3 class="statement-title" id="monthPlanTitle">This month so far</h3>
+            <p class="month-plan-total" id="monthPlanTotal"></p>
+          </div>
+          <div class="month-plan-bar" id="monthPlanBar" aria-hidden="true"><span></span><i></i></div>
+          <p class="hint" id="monthPlanPace"></p>
+          <ul class="month-plan-rows" id="monthPlanRows"></ul>
+          <p class="hint" id="monthPlanNote" hidden></p>
+        </section>
+
+        <section class="plan-suggestions mini-card" id="planSuggestions" aria-labelledby="planSuggestionsTitle" hidden>
+          <h3 class="statement-title" id="planSuggestionsTitle">Keep your budget real</h3>
+          <p class="hint" id="planSuggestionsIntro"></p>
+          <ul class="plan-suggestion-list" id="planSuggestionList"></ul>
+        </section>
 
         <div class="receipt-analysis" id="receiptAnalysis">
           <div class="receipt-analysis-head">
@@ -1074,14 +1131,15 @@
     </nav>
 
     <script src="./icons.js"></script>
-    <script src="./budget-core.js?v=20261111c"></script>
-    <script src="./journey-core.js?v=20261111c"></script>
-    <script src="./script.js?v=20261111c"></script>
-    <script src="./receipt-core.js?v=20261111c"></script>
-    <script src="./receipts.js?v=20261111c"></script>
-    <script src="./nav.js?v=20261111c"></script>
-    <script src="./overview.js?v=20261111c"></script>
-    <script src="./journeys.js?v=20261111c"></script>
-    <script src="./home.js?v=20261111c"></script>
+    <script src="./budget-core.js?v=20261111e"></script>
+    <script src="./journey-core.js?v=20261111e"></script>
+    <script src="./script.js?v=20261111e"></script>
+    <script src="./receipt-core.js?v=20261111e"></script>
+    <script src="./statement-core.js?v=20261111e"></script>
+    <script src="./receipts.js?v=20261111e"></script>
+    <script src="./nav.js?v=20261111e"></script>
+    <script src="./overview.js?v=20261111e"></script>
+    <script src="./journeys.js?v=20261111e"></script>
+    <script src="./home.js?v=20261111e"></script>
   </body>
 </html>

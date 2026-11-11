@@ -1,0 +1,4 @@
+Date,Amount,Account Number,,Transaction Type,Transaction Details,Balance,Category,Merchant Name
+02 Oct 26,-85.40,123456789,,EFTPOS DEBIT,WOOLWORTHS 1234 SYDNEY,1234.56,Groceries,Woolworths
+04 Oct 26,-120.00,123456789,,DIRECT DEBIT,AGL SALES PTY LTD 12345,1114.56,Utilities,
+09 Oct 26,250.00,123456789,,CREDIT,REFUND ACME,1364.56,Income,

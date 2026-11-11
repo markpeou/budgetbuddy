@@ -2621,6 +2621,42 @@ function getBudgetModel() {
 }
 window.getBudgetModel = getBudgetModel;
 
+/**
+ * Change the plan from real spending (Spending tab suggestions). Amounts are
+ * monthly in the income currency; each row keeps its own frequency and currency.
+ */
+window.BudgetRows = {
+  /** Set a cost to `monthly` a month (converted to its own frequency and currency). */
+  setMonthly(rowId, monthly) {
+    const tr = document.querySelector(`tr.expense-row[data-row-id="${CSS.escape(String(rowId))}"]`);
+    if (!tr || !Core) return false;
+    const freq = tr.querySelector('.expense-freq-select').value || 'monthly';
+    const cur = (tr.querySelector('.expense-currency-select') || {}).value || getReportingCurrency();
+    const inRow = convert(monthly, getIncomeCurrency(), cur) / Core.frequencyToMonthly(1, freq);
+    if (!Number.isFinite(inRow)) return false;
+    const input = tr.querySelector('.expense-amount-input');
+    const dec = getCurrencyMeta(cur).decimals;
+    input.value = String(Math.round(inRow * 10 ** dec) / 10 ** dec);
+    if (input.formatAmountValue) input.formatAmountValue();
+    input.dispatchEvent(new Event('input', { bubbles: true }));
+    recomputeAll();
+    return true;
+  },
+  /** Add a monthly cost to a group ('fixed' | 'variable' | 'subs'). */
+  add(group, name, monthly) {
+    const body = { fixed: fixedExpensesBody, variable: variableExpensesBody, subs: subscriptionsBody }[group];
+    if (!body) return false;
+    const cur = getIncomeCurrency();
+    // Fill an empty row first rather than leaving blanks above the new cost.
+    const empty = [...body.querySelectorAll('tr.expense-row')].find((tr) => !tr.querySelector('.expense-name-input').value.trim() && !parseAmount(tr.querySelector('.expense-amount-input').value));
+    if (empty) empty.remove();
+    const tr = createExpenseRow(body, { name, frequency: 'monthly', currency: cur, amount: Math.round(monthly * 100) / 100 });
+    (tr || body.lastElementChild).querySelector('.expense-amount-input').dispatchEvent(new Event('input', { bubbles: true }));
+    recomputeAll();
+    return true;
+  },
+};
+
 /** Saved scenarios, for comparing two side by side in one currency. */
 window.BudgetScenarios = {
   list() {

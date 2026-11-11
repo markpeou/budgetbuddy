@@ -26,6 +26,7 @@
 
   const CALCULATORS = [
     { to: 'go/income', name: 'Budget planner', icon: 'wallet', answer: 'Money in, money out and savings, in any currency. Feeds every calculator.' },
+    { to: 'go/spending', name: 'Track what you spend', icon: 'receipt', answer: 'Snap receipts or add a bank statement. Shows the month against your plan.' },
     { to: 'tool/understand', name: 'Understand my money', icon: 'chart-pie', answer: 'Where it goes, and how much is left over.' },
     { to: 'tool/emergency', name: 'Emergency fund', icon: 'life-buoy', answer: 'How much to keep for emergencies.' },
     { to: 'tool/goal', name: 'Savings goal', icon: 'target', answer: 'How long it takes, or how much to save.' },
@@ -41,6 +42,7 @@
   // Opening the budget planner directly, with guidance.
   const GO = {
     income: { tab: 'income', q: 'Budget planner', guide: 'Add your income, then your costs.' },
+    spending: { tab: 'spending', q: 'What you actually spend', guide: 'Snap a receipt, or add your bank statement once a month.', scroll: '#receiptsSection' },
   };
 
   const JOURNEYS = [

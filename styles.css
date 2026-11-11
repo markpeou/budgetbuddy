@@ -3047,3 +3047,317 @@ body.sheet-open .tab-bar {
 canvas {
   max-width: 100%;
 }
+
+/* ------------------------------------------------------------------ */
+/* Bank statements, this month so far, plan suggestions                */
+/* ------------------------------------------------------------------ */
+
+.statement-card,
+.statement-review,
+.month-plan,
+.plan-suggestions {
+  margin-top: 14px;
+}
+
+.statement-review[hidden],
+.month-plan[hidden],
+.plan-suggestions[hidden] {
+  display: none;
+}
+
+.statement-head {
+  display: flex;
+  gap: 12px;
+  align-items: flex-start;
+}
+
+.statement-head .hint {
+  margin: 4px 0 0;
+}
+
+.statement-title {
+  margin: 0;
+  font-size: 15px;
+  font-weight: 700;
+  color: var(--text);
+}
+
+.statement-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 12px;
+}
+
+.statement-summary {
+  margin: 6px 0 10px;
+  font-size: 14px;
+  color: var(--text);
+}
+
+.statement-options {
+  display: grid;
+  grid-template-columns: auto minmax(0, 160px);
+  align-items: center;
+  gap: 6px 10px;
+  margin-bottom: 10px;
+}
+
+.statement-options .tool-reset {
+  grid-column: 1 / -1;
+  justify-self: start;
+}
+
+.statement-list {
+  max-height: 420px;
+  overflow-y: auto;
+  margin: 0 0 12px;
+  padding: 0;
+  list-style: none;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+}
+
+.statement-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto minmax(0, 150px);
+  gap: 6px 10px;
+  align-items: center;
+  padding: 8px 10px;
+  border-top: 1px solid var(--border);
+}
+
+.statement-row:first-child {
+  border-top: 0;
+}
+
+.statement-row.is-off .statement-merchant,
+.statement-row.is-off .statement-amount {
+  color: var(--muted);
+  text-decoration: line-through;
+}
+
+.statement-check {
+  display: flex;
+  gap: 10px;
+  align-items: center;
+  min-width: 0;
+  cursor: pointer;
+}
+
+.statement-check input {
+  width: 18px;
+  height: 18px;
+  flex: none;
+  accent-color: var(--color-brand-primary);
+}
+
+.statement-text {
+  display: grid;
+  min-width: 0;
+}
+
+.statement-merchant {
+  overflow: hidden;
+  font-size: 14px;
+  font-weight: 600;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.statement-meta {
+  font-size: 12px;
+  color: var(--muted);
+}
+
+.statement-amount {
+  font-size: 14px;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+.statement-cat {
+  width: 100%;
+  min-height: 36px;
+}
+
+@media (max-width: 600px) {
+  .statement-row {
+    grid-template-columns: minmax(0, 1fr) auto;
+  }
+  .statement-cat {
+    grid-column: 1 / -1;
+  }
+  .statement-options {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+
+.month-plan-head {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: space-between;
+  gap: 4px 12px;
+  align-items: baseline;
+}
+
+.month-plan-total {
+  margin: 0;
+  font-size: 15px;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+}
+
+.month-plan-bar {
+  position: relative;
+  height: 10px;
+  margin: 10px 0 6px;
+  border-radius: 999px;
+  background: var(--color-bg-inset);
+  border: 1px solid var(--border);
+}
+
+.month-plan-bar span {
+  display: block;
+  height: 100%;
+  border-radius: 999px;
+  background: var(--color-accent-teal);
+  transition: width 0.5s ease;
+}
+
+.month-plan-bar[data-state='ahead'] span {
+  background: var(--color-accent-yellow);
+}
+
+.month-plan-bar[data-state='over'] span {
+  background: var(--color-danger);
+}
+
+/* Where spending "should" be by today */
+.month-plan-bar i {
+  position: absolute;
+  top: -4px;
+  bottom: -4px;
+  width: 2px;
+  background: var(--text);
+  border-radius: 2px;
+}
+
+.month-plan-rows {
+  display: grid;
+  gap: 10px;
+  margin: 12px 0 0;
+  padding: 0;
+  list-style: none;
+}
+
+.month-plan-row-top {
+  display: flex;
+  justify-content: space-between;
+  gap: 10px;
+  font-size: 14px;
+}
+
+.month-plan-name {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 8px;
+  align-items: center;
+  font-weight: 600;
+}
+
+.month-plan-value {
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+.month-plan-tag {
+  padding: 1px 8px;
+  border-radius: 999px;
+  background: var(--color-bg-inset);
+  border: 1px solid var(--border);
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--muted);
+}
+
+.is-over .month-plan-tag {
+  background: var(--color-danger-soft);
+  border-color: transparent;
+  color: #991b1b;
+}
+
+.is-ahead .month-plan-tag {
+  background: #fff7e0;
+  border-color: transparent;
+  color: #7a5200;
+}
+
+.month-plan-mini {
+  height: 6px;
+  margin-top: 5px;
+  border-radius: 999px;
+  background: var(--color-bg-inset);
+}
+
+.month-plan-mini span {
+  display: block;
+  height: 100%;
+  border-radius: 999px;
+  background: var(--color-accent-teal);
+  transition: width 0.5s ease;
+}
+
+.is-ahead .month-plan-mini span {
+  background: var(--color-accent-yellow);
+}
+
+.is-over .month-plan-mini span {
+  background: var(--color-danger);
+}
+
+.is-unplanned .month-plan-mini span {
+  background: #c4b5fd;
+}
+
+.plan-suggestion-list {
+  display: grid;
+  gap: 10px;
+  margin: 10px 0 0;
+  padding: 0;
+  list-style: none;
+}
+
+.plan-suggestion {
+  padding: 12px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  background: var(--color-bg-surface);
+}
+
+.plan-suggestion p {
+  margin: 0 0 10px;
+  font-size: 14px;
+}
+
+.plan-suggestion-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.month-plan-bar[hidden] {
+  display: none;
+}
+
+/* Tap targets at least 24px */
+.statement-options .tool-reset {
+  min-height: 32px;
+}
+
+.table-receipts .link-btn {
+  min-width: 24px;
+  min-height: 24px;
+  text-align: left;
+}

@@ -19,6 +19,14 @@ Parked ideas, roughly in priority order. Move an item into work by opening an is
 - Home loan: offset account, fortnightly repayments, rate change scenarios.
 - Investment growth: tax, and a deliberately bumpy-returns view.
 
+## Spending tracking (next steps after statements)
+
+- **PDF statements** through the receipt reader (needs the worker deployed). Many banks default to PDF.
+- **Refunds** reduce spending in their category (today money in is left out).
+- **Email receipts**: decide on accounts first. Gmail access is a restricted Google permission (security review past a small number of users); a forwarding address avoids that but needs accounts and storage.
+- **Add to home screen** (web app manifest + shortcut "Snap a receipt"), then push reminders (iPhone only for home-screen apps).
+- **Live bank feeds** (open banking provider): per-user cost and accreditation; later stage.
+
 ## Summary (after OCR is reliable)
 
 - Safe to spend today.

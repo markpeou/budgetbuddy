@@ -104,7 +104,15 @@
   }
 
   function initEngine() {
-    const saved = loadJson(ENGINE_KEY, 'claude');
+    // Claude only by default when it can work: the reader service is set up,
+    // or this browser has its own key. Otherwise start on-device.
+    let hasKey = false;
+    try {
+      hasKey = Boolean(localStorage.getItem(API_KEY_KEY));
+    } catch (e) {
+      /* ignore */
+    }
+    const saved = loadJson(ENGINE_KEY, RECEIPT_PROXY_URL || hasKey ? 'claude' : 'ocr');
     const radio = document.querySelector(`input[name="receiptEngine"][value="${saved}"]`);
     if (radio) radio.checked = true;
     try {
@@ -405,6 +413,7 @@
 
   async function processFile(file) {
     if (!file || busy) return;
+    if (isCsv(file)) return processStatement(file);
     if (!isPdf(file) && !/^image\//.test(file.type || '') && !/\.(jpe?g|png|heic|heif|webp|gif)$/i.test(file.name || '')) {
       setStatus('That file type isn’t supported. Use a photo, screenshot or PDF.', 'error');
       return;
@@ -550,9 +559,13 @@
     }
 
     renderLedger();
+    renderMonthPlan();
+    renderSuggestions();
   }
 
   function renderPlan(fmt) {
+    els.plan.hidden = true; // replaced by "This month so far" (renderMonthPlan)
+    if (true) return;
     if (els.period.value !== 'this-month' || !Number.isFinite(plannedVariableMonthly) || plannedVariableMonthly <= 0) {
       els.plan.hidden = true;
       return;
@@ -732,6 +745,387 @@
     a.click();
     a.remove();
     setTimeout(() => URL.revokeObjectURL(url), 1000);
+  }
+
+
+  // ---------------------------------------------------------------------------
+  // Bank statements (CSV, read on this device)
+  // ---------------------------------------------------------------------------
+
+  const SC = window.StatementCore;
+  const IMPORTS_KEY = 'budgetBuddyStatementImports_v1';
+  const DISMISSED_KEY = 'budgetBuddyPlanSuggestionsDismissed_v1';
+  let imports = loadJson(IMPORTS_KEY, []);
+  let dismissed = loadJson(DISMISSED_KEY, {});
+  let pending = null; // the statement being checked: { text, flip, currency, rows, from, to }
+
+  const st = {
+    input: $('statementFileInput'),
+    status: $('statementStatus'),
+    review: $('statementReview'),
+    summary: $('statementSummary'),
+    currency: $('statementCurrency'),
+    flip: $('statementFlip'),
+    list: $('statementList'),
+    add: $('statementAdd'),
+    cancel: $('statementCancel'),
+    checkin: $('checkinBtn'),
+    plan: $('monthPlan'),
+    planTotal: $('monthPlanTotal'),
+    planBar: $('monthPlanBar'),
+    planPace: $('monthPlanPace'),
+    planRows: $('monthPlanRows'),
+    planNote: $('monthPlanNote'),
+    sug: $('planSuggestions'),
+    sugIntro: $('planSuggestionsIntro'),
+    sugList: $('planSuggestionList'),
+  };
+
+  function isCsv(file) {
+    return /\.(csv|tsv|txt)$/i.test(file.name || '') || /csv|comma-separated/.test(file.type || '');
+  }
+
+  function setStatementStatus(msg, kind) {
+    if (!st.status) return;
+    st.status.textContent = msg || '';
+    st.status.dataset.kind = kind || '';
+  }
+
+  /** Budget currency (the income currency): plans and actuals compare in it. */
+  function modelCurrency() {
+    return typeof getIncomeCurrency === 'function' ? getIncomeCurrency() : getReportingCurrency();
+  }
+
+  async function processStatement(file) {
+    if (!SC || !file) return;
+    if (file.size > 5 * 1024 * 1024) {
+      setStatementStatus('That file is too big for a statement (over 5 MB). Try a shorter date range.', 'error');
+      return;
+    }
+    let text = '';
+    try {
+      text = await file.text();
+    } catch (e) {
+      setStatementStatus('Couldn’t open that file. Try downloading it again.', 'error');
+      return;
+    }
+    pending = { text, flip: false, currency: modelCurrency() };
+    parsePending();
+  }
+
+  function parsePending() {
+    const r = SC.parseStatement(pending.text, { currency: pending.currency, learned, flip: pending.flip });
+    if (!r.ok) {
+      pending = null;
+      st.review.hidden = true;
+      setStatementStatus(
+        r.error === 'no-transactions'
+          ? 'No transactions found in that file. Check it has dates and amounts.'
+          : 'That doesn’t look like a bank statement. In your bank’s app or website, export transactions as CSV (not PDF) and try again.',
+        'error'
+      );
+      return;
+    }
+    // Keep ticks and categories the person already changed when re-reading (currency or swap).
+    const before = pending.rows ? Object.fromEntries(pending.rows.map((x) => [x.key, x])) : {};
+    pending.rows = SC.markDuplicates(r.transactions, receipts).map((t) => {
+      const old = before[t.key];
+      return { ...t, include: old && old.touched ? old.include : !t.skip, category: old && old.catTouched ? old.category : t.category, touched: old && old.touched, catTouched: old && old.catTouched };
+    });
+    pending.from = r.from;
+    pending.to = r.to;
+    if (st.currency.value !== pending.currency) st.currency.value = pending.currency;
+    setStatementStatus('', '');
+    renderReview();
+    st.review.hidden = false;
+    st.review.scrollIntoView({ behavior: 'smooth', block: 'start' });
+  }
+
+  function renderReview() {
+    const rows = pending.rows;
+    const chosen = rows.filter((x) => x.include);
+    const fmt = (n, c) => formatInCurrency(n, c);
+    const total = chosen.reduce((a, x) => a + x.amount, 0);
+    const reasons = {};
+    rows.filter((x) => !x.include).forEach((x) => {
+      const why = x.skip || 'Unticked';
+      reasons[why] = (reasons[why] || 0) + 1;
+    });
+    const left = Object.entries(reasons).map(([k, n]) => `${n} ${k.toLowerCase()}`).join(', ');
+    st.summary.textContent = `${chosen.length} purchase${chosen.length === 1 ? '' : 's'} to add, ${formatDate(pending.from)} to ${formatDate(pending.to)}, ${fmt(total, pending.currency)} in total.${left ? ` Left out: ${left}.` : ''}`;
+    st.add.textContent = chosen.length ? `Add ${chosen.length} purchase${chosen.length === 1 ? '' : 's'}` : 'Nothing to add';
+    st.add.disabled = !chosen.length;
+
+    st.list.innerHTML = '';
+    rows.forEach((x, i) => {
+      const li = document.createElement('li');
+      li.className = 'statement-row' + (x.include ? '' : ' is-off');
+      const lab = document.createElement('label');
+      lab.className = 'statement-check';
+      const cb = document.createElement('input');
+      cb.type = 'checkbox';
+      cb.checked = x.include;
+      cb.addEventListener('change', () => {
+        x.include = cb.checked;
+        x.touched = true;
+        renderReview();
+      });
+      const text = document.createElement('span');
+      text.className = 'statement-text';
+      const name = document.createElement('span');
+      name.className = 'statement-merchant';
+      name.textContent = x.merchant;
+      const meta = document.createElement('span');
+      meta.className = 'statement-meta';
+      meta.textContent = formatDate(x.date) + (x.skip ? ` · ${x.skip}` : '');
+      text.append(name, meta);
+      lab.append(cb, text);
+      const amt = document.createElement('span');
+      amt.className = 'statement-amount';
+      amt.textContent = (x.out ? '' : '+') + fmt(x.amount, x.currency);
+      const sel = document.createElement('select');
+      sel.className = 'cell-input cell-input--compact statement-cat';
+      sel.setAttribute('aria-label', `Category for ${x.merchant}, ${formatDate(x.date)}`);
+      fillCategorySelect(sel);
+      sel.value = x.category;
+      sel.addEventListener('change', () => {
+        // One choice applies to every line from the same place.
+        const k = RC.fold(x.merchant).trim();
+        rows.forEach((y) => {
+          if (y === x || RC.fold(y.merchant).trim() === k) {
+            y.category = sel.value;
+            y.catTouched = true;
+          }
+        });
+        renderReview();
+        const again = st.list.querySelectorAll('.statement-cat')[i];
+        if (again) again.focus();
+      });
+      li.append(lab, amt, sel);
+      st.list.appendChild(li);
+    });
+  }
+
+  function addPending() {
+    if (!pending) return;
+    const chosen = pending.rows.filter((x) => x.include);
+    const now = new Date().toISOString();
+    chosen.forEach((x) => {
+      receipts.push({ id: newId(), date: x.date, merchant: x.merchant, amount: x.amount, currency: x.currency, category: x.category, source: 'statement', key: x.key, createdAt: now });
+      if (x.catTouched) {
+        const k = RC.fold(x.merchant).trim();
+        if (k && k !== 'unknown') learned[k] = x.category;
+      }
+    });
+    imports.push({ from: pending.from, to: pending.to, count: chosen.length, currency: pending.currency, importedAt: now });
+    saveJson(STORE_KEY, receipts);
+    saveJson(LEARNED_KEY, learned);
+    saveJson(IMPORTS_KEY, imports);
+    setStatementStatus(`Added ${chosen.length} purchase${chosen.length === 1 ? '' : 's'} from ${formatDate(pending.from)} to ${formatDate(pending.to)}.`, 'ok');
+    pending = null;
+    st.review.hidden = true;
+    render();
+    const target = !st.sug.hidden ? st.sug : !st.plan.hidden ? st.plan : null;
+    if (target) target.scrollIntoView({ behavior: 'smooth', block: 'start' });
+  }
+
+  // ---------------------------------------------------------------------------
+  // This month so far, against the plan
+  // ---------------------------------------------------------------------------
+
+  /** Plans are rough: whole currency units read better than cents. */
+  function wholeMoney(n, cur) {
+    return formatInCurrency(Math.round(n), cur).replace(/[.,]00$/, '');
+  }
+
+  function planItems() {
+    const m = typeof window.getBudgetModel === 'function' ? window.getBudgetModel() : null;
+    if (!m || !m.ok) return null;
+    return { currency: m.currency, items: m.moneyOut.items.map((i) => ({ id: i.id, name: i.name, kind: i.kind, frequency: i.frequency, monthly: i.monthly })) };
+  }
+
+  function renderMonthPlan() {
+    if (!SC || !st.plan) return;
+    const p = planItems();
+    const toModel = (a, c) => convert(a, c, p ? p.currency : modelCurrency());
+    if (!p) {
+      st.plan.hidden = true;
+      return;
+    }
+    const r = SC.monthSoFar(receipts, p.items, toModel);
+    const fmt = (n) => wholeMoney(n, p.currency);
+    if (!r.planned && !r.total) {
+      st.plan.hidden = true;
+      return;
+    }
+    st.plan.hidden = false;
+    const monthName = new Date().toLocaleDateString('en-GB', { month: 'long' });
+    $('monthPlanTitle').textContent = `${monthName} so far`;
+    st.planTotal.textContent = r.planned ? `${fmt(r.total)} of ${fmt(r.planned)} planned` : `${fmt(r.total)} spent`;
+    // The bar is day-to-day spending against where it'd be at an even pace.
+    const d = r.dayToDay;
+    const share = d.planned ? d.spent / d.planned : 0;
+    st.planBar.hidden = !d.planned;
+    st.planBar.dataset.state = share > 1 ? 'over' : share > r.pace * 1.15 ? 'ahead' : 'ok';
+    st.planBar.firstElementChild.style.width = `${Math.min(1, share) * 100}%`;
+    st.planBar.lastElementChild.style.left = `${r.pace * 100}%`;
+    st.planPace.textContent = !r.total
+      ? `Nothing added for ${monthName} yet. Snap a receipt, or add your statement at the end of the month.`
+      : d.planned
+        ? `Day-to-day spending: ${fmt(d.spent)} of ${fmt(d.planned)}. Day ${r.day} of ${r.days}, so about ${fmt(d.expected)} by now at an even pace (the line).`
+        : `Day ${r.day} of ${r.days}.`;
+    st.planRows.innerHTML = '';
+    const TAG = { over: 'Over plan', ahead: 'Ahead of pace', unplanned: 'Not in your budget', ok: '' };
+    r.rows.forEach((x) => {
+      const li = document.createElement('li');
+      li.className = `month-plan-row is-${x.status}`;
+      const top = document.createElement('div');
+      top.className = 'month-plan-row-top';
+      const name = document.createElement('span');
+      name.className = 'month-plan-name';
+      name.textContent = RC.labelFor(x.id);
+      if (TAG[x.status]) {
+        const t = document.createElement('span');
+        t.className = 'month-plan-tag';
+        t.textContent = TAG[x.status];
+        name.appendChild(t);
+      }
+      const val = document.createElement('span');
+      val.className = 'month-plan-value';
+      val.textContent = x.planned ? `${fmt(x.spent)} of ${fmt(x.planned)}` : fmt(x.spent);
+      top.append(name, val);
+      const bar = document.createElement('div');
+      bar.className = 'month-plan-mini';
+      const fill = document.createElement('span');
+      fill.style.width = `${x.planned ? Math.min(1, x.spent / x.planned) * 100 : 100}%`;
+      bar.appendChild(fill);
+      li.append(top, bar);
+      st.planRows.appendChild(li);
+    });
+    st.planNote.hidden = false;
+    st.planNote.textContent = r.skipped
+      ? `${r.skipped} purchase${r.skipped === 1 ? '' : 's'} left out until exchange rates load.`
+      : 'Only what you’ve added counts. Purchases you haven’t snapped appear when you add your statement.';
+  }
+
+  function renderSuggestions() {
+    if (!SC || !st.sug) return;
+    const p = planItems();
+    if (!p || !imports.length) {
+      st.sug.hidden = true;
+      return;
+    }
+    const toModel = (a, c) => convert(a, c, p.currency);
+    const months = SC.coveredMonths(imports);
+    const tag = months.join(',');
+    const list = SC.suggestions(receipts, p.items, imports, toModel).filter((x) => !dismissed[`${x.category}|${tag}`]).slice(0, 4);
+    st.sug.hidden = !list.length;
+    if (!list.length) return;
+    const fmt = (n) => wholeMoney(n, p.currency);
+    const monthWords = months.map((k) => new Date(`${k}-01T00:00:00`).toLocaleDateString('en-GB', { month: 'long' }));
+    st.sugIntro.textContent = `Compared with what you actually spent in ${monthWords.length > 1 ? `${monthWords.slice(0, -1).join(', ')} and ${monthWords.at(-1)}` : monthWords[0]}${months.length > 1 ? ' (average a month)' : ''}.`;
+    st.sugList.innerHTML = '';
+    list.forEach((x) => {
+      const li = document.createElement('li');
+      li.className = 'plan-suggestion';
+      const label = RC.labelFor(x.category);
+      const text = document.createElement('p');
+      text.textContent = x.action.type === 'set'
+        ? `${label}: you spent about ${fmt(x.actual)} a month. Your budget has ${fmt(x.planned)}.`
+        : `${label}: about ${fmt(x.actual)} a month that isn’t in your budget${x.planned ? ' as a regular cost' : ''}.`;
+      const actions = document.createElement('div');
+      actions.className = 'plan-suggestion-actions';
+      const yes = document.createElement('button');
+      yes.type = 'button';
+      yes.className = 'btn';
+      yes.textContent = x.action.type === 'set'
+        ? `Update ${x.action.rowName} to ${fmt(x.action.monthly)}`
+        : `Add ${label} at ${fmt(x.action.monthly)}`;
+      yes.addEventListener('click', () => {
+        const R = window.BudgetRows;
+        const done = R && (x.action.type === 'set' ? R.setMonthly(x.action.rowId, x.action.monthly) : R.add(x.action.group, label, x.action.monthly));
+        setStatementStatus(done
+          ? (x.action.type === 'set' ? `Updated ${x.action.rowName} to ${fmt(x.action.monthly)} a month.` : `Added ${label} to your budget at ${fmt(x.action.monthly)} a month.`)
+          : 'Couldn’t change that cost. Edit it in your budget instead.', done ? 'ok' : 'warn');
+        render();
+      });
+      const no = document.createElement('button');
+      no.type = 'button';
+      no.className = 'btn btn-ghost';
+      no.textContent = 'Not now';
+      no.addEventListener('click', () => {
+        dismissed[`${x.category}|${tag}`] = true;
+        saveJson(DISMISSED_KEY, dismissed);
+        renderSuggestions();
+      });
+      actions.append(yes, no);
+      li.append(text, actions);
+      st.sugList.appendChild(li);
+    });
+  }
+
+  // ---------------------------------------------------------------------------
+  // Monthly check-in: a calendar reminder on the 1st (a .ics file)
+  // ---------------------------------------------------------------------------
+
+  function downloadCheckin() {
+    const now = new Date();
+    const first = new Date(now.getFullYear(), now.getMonth() + 1, 1);
+    const p2 = (n) => String(n).padStart(2, '0');
+    const local = `${first.getFullYear()}${p2(first.getMonth() + 1)}${p2(first.getDate())}T190000`;
+    const stamp = now.toISOString().replace(/[-:]/g, '').replace(/\.\d{3}/, '');
+    const url = `${location.origin}${location.pathname}#spending`;
+    const ics = [
+      'BEGIN:VCALENDAR', 'VERSION:2.0', 'PRODID:-//Budget Buddy//Check-in//EN', 'CALSCALE:GREGORIAN',
+      'BEGIN:VEVENT',
+      `UID:checkin-${Date.now()}@budgetbuddy`,
+      `DTSTAMP:${stamp}`,
+      `DTSTART:${local}`,
+      'DURATION:PT10M',
+      'RRULE:FREQ=MONTHLY;BYMONTHDAY=1',
+      'SUMMARY:Budget Buddy check-in (10 minutes)',
+      `DESCRIPTION:Download last month’s bank statement as a CSV and add it to Budget Buddy: ${url}`,
+      `URL:${url}`,
+      'BEGIN:VALARM', 'ACTION:DISPLAY', 'DESCRIPTION:Budget Buddy check-in', 'TRIGGER:PT0M', 'END:VALARM',
+      'END:VEVENT', 'END:VCALENDAR',
+    ].join('\r\n');
+    const blob = new Blob([ics], { type: 'text/calendar;charset=utf-8' });
+    const href = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = href;
+    a.download = 'budget-buddy-check-in.ics';
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    setTimeout(() => URL.revokeObjectURL(href), 1000);
+    setStatementStatus('Open the downloaded file to add a reminder on the 1st of each month at 7pm.', 'ok');
+  }
+
+  if (SC && st.input) {
+    st.input.addEventListener('change', () => {
+      const file = st.input.files && st.input.files[0];
+      st.input.value = '';
+      processStatement(file);
+    });
+    populateCurrencySelectOptions(st.currency, modelCurrency(), { short: true });
+    st.currency.addEventListener('change', () => {
+      if (!pending) return;
+      pending.currency = st.currency.value;
+      parsePending();
+    });
+    st.flip.addEventListener('click', () => {
+      if (!pending) return;
+      pending.flip = !pending.flip;
+      pending.rows = null;
+      parsePending();
+    });
+    st.add.addEventListener('click', addPending);
+    st.cancel.addEventListener('click', () => {
+      pending = null;
+      st.review.hidden = true;
+      setStatementStatus('', '');
+    });
+    st.checkin.addEventListener('click', downloadCheckin);
   }
 
   // ---------------------------------------------------------------------------

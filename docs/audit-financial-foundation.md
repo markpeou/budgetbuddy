@@ -137,3 +137,12 @@ Still to decide or do: debt type on costs (kept out because the cost groups stay
 - **Edge cases:** huge values show 6 significant figures (no floating-point noise); 0% loans and 0% returns read naturally; junk and negative input ask for a valid figure.
 - **Robustness:** the planner no longer breaks (or stops autosaving) if the chart library can't load; the library is pinned to a fixed version.
 - **User test script:** `docs/user-test-script.md`.
+
+## 12. Ongoing budget: receipts and bank statements
+
+- **Bank statements (CSV)** in the Spending tab, read on the device and never uploaded (`statement-core.js`, tested against CommBank, ANZ, NAB, Westpac, credit card and Vietnamese layouts). Detects the layout, which sign is spending, and day/month order; tidies merchant names; categorises (known Australian and Vietnamese shops, remembered choices, keywords).
+- **Checked before adding:** money in, transfers between your accounts and card repayments are left out (rent paid by transfer is kept); lines already imported, or matching a receipt you added (same amount, ±3 days), are left out. One category change applies to every line from the same shop and is remembered.
+- **This month so far:** each category's spending against the plan; day-to-day spending paced through the month (rent and bills aren't); "Over plan", "Ahead of pace", "Not in your budget".
+- **Keep your budget real:** from whole months a statement covers, one-tap suggestions to update a cost or add a missing one. Never lowers a cost to zero (it may be paid from another account) or changes a yearly bill to match monthly spending.
+- **Monthly reminder:** a calendar file for the 1st of each month at 7pm.
+- **Receipt reader:** on-device by default until the reader service is set up (Claude needs it, or a personal key).
