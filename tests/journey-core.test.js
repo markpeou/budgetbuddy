@@ -444,3 +444,107 @@ ok('goal projection: how much you will have', () => {
   const json = JSON.stringify([J.goalTime({ target: 5, contribution: NaN }), J.goalProjection({ months: 'x' })]);
   assert.ok(!/NaN|Infinity/.test(json));
 });
+
+// ---------------------------------------------------------------------------
+// Phase 3: projections (reference figures computed independently)
+// ---------------------------------------------------------------------------
+const near = (a, b, tol = 0.01) => assert.ok(Math.abs(a - b) <= tol, `${a} ≉ ${b}`);
+const T0 = new Date(2026, 10, 9);
+
+ok('loanPayment: standard repayment, and no interest', () => {
+  near(J.loanPayment(500000, 6, 300), 3221.507);
+  near(J.loanPayment(1200, 0, 12), 100);
+  assert.strictEqual(J.loanPayment(0, 6, 300), 0);
+});
+
+ok('payoff: a debt month by month, and edge cases', () => {
+  const d = J.payoff({ balance: 12000, annualRate: 19.99, payment: 400, today: T0 });
+  assert.strictEqual(d.status, 'ok');
+  assert.strictEqual(d.months, 42);
+  near(d.totalInterest, 4770.23);
+  near(d.totalPaid, 16770.23);
+  assert.ok(d.lastPayment <= 400);
+  assert.strictEqual(d.endDate.getFullYear(), 2030); // 42 months from Nov 2026 → May 2030
+  // Repayment below the interest: never paid off; says what interest is each month.
+  const never = J.payoff({ balance: 12000, annualRate: 24, payment: 200 });
+  assert.strictEqual(never.status, 'never');
+  near(never.interestOnly, 240);
+  assert.strictEqual(J.payoff({ balance: 12000, annualRate: 10 }).status, 'no-payment');
+  assert.strictEqual(J.payoff({ balance: 0, payment: 100 }).status, 'invalid');
+  assert.strictEqual(J.payoff({ balance: 5000, payment: 100, lumpSum: 6000 }).status, 'paid');
+  // No interest: simple division, rounded up.
+  assert.strictEqual(J.payoff({ balance: 1000, payment: 300 }).months, 4);
+});
+
+ok('extraRepayment: A$500 a month on a A$500k, 6%, 25-year loan', () => {
+  const x = J.extraRepayment({ balance: 500000, annualRate: 6, years: 25, extra: 500, today: T0 });
+  assert.strictEqual(x.paymentFrom, 'years');
+  near(x.payment, 3221.507);
+  assert.strictEqual(x.base.months, 300);
+  assert.strictEqual(x.withExtra.months, 224);
+  assert.strictEqual(x.monthsSaved, 76); // 6 years 4 months
+  near(x.interestSaved, 466452.10 - 331257.41, 0.05);
+  // Given repayment wins over years.
+  assert.strictEqual(J.extraRepayment({ balance: 500000, annualRate: 6, payment: 4000, years: 25 }).paymentFrom, 'given');
+  // A lump sum alone also shortens it.
+  const lump = J.extraRepayment({ balance: 500000, annualRate: 6, years: 25, lumpSum: 20000 });
+  assert.ok(lump.monthsSaved > 0 && lump.interestSaved > 0);
+  // Repayment too low: no comparison, no NaN.
+  const low = J.extraRepayment({ balance: 500000, annualRate: 6, payment: 1000, extra: 500 });
+  assert.strictEqual(low.base.status, 'never');
+  assert.strictEqual(low.monthsSaved, undefined);
+});
+
+ok('investProjection: compound growth, contributions, range, inflation', () => {
+  const a = J.investProjection({ start: 10000, years: 10, annualReturn: 8 });
+  near(a.balance, 21589.25);
+  near(a.growth, 11589.25);
+  assert.strictEqual(a.yearly.length, 10);
+  const b = J.investProjection({ contribution: 500, years: 10, annualReturn: 8 });
+  near(b.balance, 90062.14);
+  assert.strictEqual(b.contributed, 60000);
+  assert.ok(b.lower < b.balance && b.balance < b.higher);
+  // Weekly A$100 is the same as A$433.33 a month.
+  near(J.investProjection({ contribution: 100, frequency: 'weekly', years: 1 }).contributed, 5200);
+  // Fees come off the return: 8% less 1% is the same as 7%.
+  near(J.investProjection({ start: 10000, years: 10, annualReturn: 8, annualFee: 1 }).balance, 10000 * Math.pow(1.07, 10));
+  // Today's money: 3% inflation over 10 years.
+  near(J.investProjection({ start: 10000, years: 10, annualReturn: 8, inflation: 3 }).real, 21589.25 / Math.pow(1.03, 10));
+  assert.strictEqual(J.investProjection({ start: 10000 }).status, 'no-years');
+  assert.strictEqual(J.investProjection({ years: 5 }).status, 'nothing');
+});
+
+ok('moveCompare: monthly change, upfront, savings after 6 and 12 months', () => {
+  const m = J.moveCompare({ incomeNow: 6000, costsNow: 4000, incomeNew: 5000, costsNew: 2500, upfront: 8000, savings: 20000 });
+  assert.strictEqual(m.leftNow, 2000);
+  assert.strictEqual(m.leftNew, 2500);
+  assert.strictEqual(m.change, 500);
+  assert.strictEqual(m.afterMove, 12000);
+  assert.deepStrictEqual(m.after.map((a) => [a.move, a.stay]), [[27000, 32000], [42000, 44000]]);
+  assert.strictEqual(m.paybackMonths, 16);
+  const short = J.moveCompare({ incomeNow: 6000, costsNow: 4000, incomeNew: 3000, costsNew: 3500, upfront: 25000, savings: 20000 });
+  assert.strictEqual(short.short, 5000);
+  assert.strictEqual(short.monthsToSaveUpfront, 3);
+  assert.strictEqual(short.lastsMonths, null); // nothing left after the move
+  const lasts = J.moveCompare({ incomeNow: 6000, costsNow: 4000, incomeNew: 3000, costsNew: 3500, upfront: 5000, savings: 20000 });
+  assert.strictEqual(lasts.lastsMonths, 30);
+});
+
+ok('breakScenario: one-off costs are added to the months', () => {
+  const b = J.breakScenario({ funds: 20000, expenses: 3000, months: 6, oneOff: 2500 });
+  assert.strictEqual(b.monthsCost, 18000);
+  assert.strictEqual(b.cost, 20500);
+  assert.strictEqual(b.status, 'short');
+  assert.strictEqual(b.shortfall, 500);
+  // Income covers the months, but the one-off still costs.
+  const c = J.breakScenario({ funds: 20000, expenses: 3000, income: 3000, months: 6, oneOff: 2500 });
+  assert.strictEqual(c.status, 'affordable');
+  assert.strictEqual(c.leftAfter, 17500);
+});
+
+ok('incomeChange: a later start keeps saving on today’s income first', () => {
+  const c = J.incomeChange({ income: 6000, newIncome: 3000, expenses: 4000, savings: 10000, startMonths: 3 });
+  assert.strictEqual(c.savingsAtChange, 16000);
+  assert.strictEqual(c.savingsCoverMonths, 16);
+  assert.strictEqual(J.incomeChange({ income: 6000, newIncome: 3000, expenses: 4000, savings: 10000 }).savingsCoverMonths, 10);
+});

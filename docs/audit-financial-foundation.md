@@ -110,3 +110,20 @@ Not done in Phase 1 (moved to Phase 2): debt type on costs (debt is counted once
 - **Tests:** 9 more (emergency 9 months and target date, goal time/contribution/projection with frequency, interest and edge cases). 113 in total.
 
 Still to decide or do: debt type on costs (kept out because the cost groups stay as they are; debt is counted once as a cost and suggested as a must-pay cost by its name). Phase 3: time off with one-off costs and 3/6/12 side by side, moving, income change with start date and goal impact, scenario comparison. Phase 4: the same result layout on the remaining pages (planner Summary, time off, income change), accessibility review.
+
+## 10. Phase 3 status: done (plus projections)
+
+**Projections (new calculators, all in `journey-core.js`, tested against independent figures)**
+- Investment growth (`investProjection`): starting amount and/or regular contributions, 5/10/20/30 years, yearly return compounded monthly, optional fees and inflation (today's money), ±2% range, year-by-year chart.
+- Pay off debt (`payoff`): date, time and interest; extra-repayment comparison side by side; "never paid off" when the repayment doesn't cover interest.
+- Home loan extra repayments (`extraRepayment`, `loanPayment`): repayment given or worked out from years left; extra monthly and/or one-off; time and interest saved; balance chart. Check: A$500k, 6%, 25 yrs + A$500/month saves 6 yrs 4 months and A$135,195.
+- Savings goal presets: trip (on your current budget: defaults to money left over, shows share of left over and the fastest date) and home deposit (amount by a date).
+- Quick chips: preset amounts and "My money left over (A$…)".
+
+**Phase 3**
+- Time off / leaving a job: one-off costs, 3/6/12 months side by side for both scenarios, "if it lasted longer".
+- Moving somewhere new (`moveCompare`): costs there in any currency (converted, rate noted), upfront costs, left over there vs here, savings at 6 and 12 months, payback.
+- Change in income: optional start date (keep saving until then), effect on the savings & goals plan, next step.
+- Compare scenarios: two saved scenarios (or the budget now) side by side in the income currency, with differences and the biggest cost changes. `BudgetScenarios.model` keeps other income, savings and essentials alongside the migrated data.
+
+**Still open:** multiple debts (avalanche vs snowball), offset accounts, debt as a cost type.

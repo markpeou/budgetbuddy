@@ -31,6 +31,11 @@
     { to: 'tool/goal', name: 'Savings goal', icon: 'target', answer: 'How long it takes, or how much to save.' },
     { to: 'tool/runway', name: 'How long your savings will last', icon: 'hourglass', answer: 'If your money coming in stopped.' },
     { to: 'tool/income', name: 'Change in income', icon: 'trending-down', answer: 'What happens if you earn more or less.' },
+    { to: 'tool/invest', name: 'Investment growth', icon: 'trending-up', answer: 'What your money could grow to over time.' },
+    { to: 'tool/debt', name: 'Pay off debt', icon: 'credit-card', answer: 'When you’ll be debt-free, and the interest.' },
+    { to: 'tool/loan', name: 'Home loan extra repayments', icon: 'home', answer: 'Time and interest saved by paying extra.' },
+    { to: 'tool/move', name: 'Moving somewhere new', icon: 'plane', answer: 'Costs there vs here, in any currency.' },
+    { to: 'tool/compare', name: 'Compare scenarios', icon: 'columns', answer: 'Two saved budgets, side by side.' },
   ];
 
   // Opening the budget planner directly, with guidance.
@@ -68,6 +73,20 @@
         { q: 'What happens if my income decreases?', d: 'What’s left on a lower income.', to: 'tool/income' },
         { q: 'Could I afford to change careers?', d: 'The cost, and when you’d be ahead.', to: 'tool/income/career' },
         { q: 'What would happen if I lost my job?', d: 'How long your savings would last.', to: 'tool/runway/jobloss' },
+        { q: 'Could I afford to move somewhere new?', d: 'Costs there vs here, up front and each month.', to: 'tool/move' },
+        { q: 'How do two of my budgets compare?', d: 'Saved scenarios, side by side.', to: 'tool/compare' },
+      ],
+    },
+    {
+      title: 'See where I could be',
+      icon: 'sprout',
+      desc: 'Projections from your numbers.',
+      items: [
+        { q: 'How long will it take to save for a trip?', d: 'On your current budget.', to: 'tool/goal/trip' },
+        { q: 'How much should I save each month for a home deposit?', d: 'The amount to reach it by a date.', to: 'tool/goal/deposit' },
+        { q: 'How much could my investment grow?', d: 'Year by year, at the return you choose.', to: 'tool/invest' },
+        { q: 'How long will it take to pay off my debt?', d: 'The date, and the interest you’d pay.', to: 'tool/debt' },
+        { q: 'How much could I save by paying extra on my home loan?', d: 'Time and interest saved.', to: 'tool/loan' },
       ],
     },
   ];
@@ -75,8 +94,8 @@
   const QUESTIONS = [
     { q: 'How much does it really cost to live each month?', to: 'tool/understand/living' },
     { q: 'How much should I save before leaving my job?', to: 'tool/runway/leave' },
-    { q: 'How much can I save over the next year?', to: 'tool/understand/year' },
-    { q: 'How much do I need for emergencies?', to: 'tool/emergency' },
+    { q: 'How long will it take to pay off my debt?', to: 'tool/debt' },
+    { q: 'If I invest monthly, how much could I have in 10 years?', to: 'tool/invest' },
     { q: 'Could I afford to work less?', to: 'tool/income/less' },
     { q: 'How much do I need to earn to cover my costs?', to: 'tool/understand/needed' },
   ];

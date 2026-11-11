@@ -48,7 +48,7 @@ Object.keys(TOOLS).forEach((id) => assert.ok(CALCULATORS.some((c) => c.to === `t
 // Every preset title is a real question.
 Object.values(TOOLS).forEach((t) => Object.values(t.presets).forEach((p) => assert.ok(p.q && p.q.endsWith('?'), `${t.name}: preset needs a question`)));
 
-assert.strictEqual(JOURNEYS.length, 3);
-assert.strictEqual(n, 10);
+assert.strictEqual(JOURNEYS.length, 4);
+assert.strictEqual(n, 17);
 assert.strictEqual(QUESTIONS.length, 6);
 console.log(`✓ home routes: ${n} journeys, ${QUESTIONS.length} questions, ${CALCULATORS.length} calculators all open a real calculator`);

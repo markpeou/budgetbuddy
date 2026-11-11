@@ -32,6 +32,9 @@
   --color-danger-hover-bg: #fecaca;
   --color-success: #059669;
   --color-success-soft: #ecfdf5;
+  /* Charts: validated pair (CVD ΔE 27.5); teal is relieved by labels + table */
+  --chart-1: #7b14ef;
+  --chart-2: #00b4a0;
 
   /* Typography */
   --font-family: 'Plus Jakarta Sans', system-ui, -apple-system, sans-serif;

@@ -181,7 +181,22 @@
     }),
     emergencySaved: () => ({ value: budget().savings, label: 'your savings' }),
     savings: () => ({ value: budget().savings, label: 'your budget' }),
+    leftOver: () => ({ value: leftOverNow() || 0, label: 'your money left over' }),
   };
+
+  /** Money left over each month from the budget, or null if not known. */
+  function leftOverNow() {
+    const m = lastBudget && lastBudget.model;
+    return m && m.ok && m.leftOver != null ? m.leftOver : null;
+  }
+
+  /** A field's budget source; a preset can point a field elsewhere (trip → money left over). */
+  function sourceOf(key) {
+    const f = FIELDS[key];
+    const tool = current && TOOLS[current.id];
+    const p = tool && (tool.presets[current.presetKey] || tool.presets.default);
+    return (p && p.sources && p.sources[key]) || (f && f.source) || null;
+  }
 
   const FIELDS = {
     savings: { label: 'Money you can access', type: 'money', source: 'savings', help: 'Saved with your budget and used by every calculator.' },
@@ -215,6 +230,41 @@
     transitionMonths: { label: 'Months before the new job pays', type: 'count', placeholder: '0' },
     transitionIncome: { label: 'Money coming in during that time, each month', type: 'money' },
     oneOff: { label: 'One-off costs (course, equipment)', type: 'money' },
+    changeStart: { label: 'When it starts (optional)', type: 'month', help: 'Until then, you keep saving on what you earn now.' },
+    breakOneOff: { label: 'One-off costs (optional)', type: 'money', help: 'Flights, a course, equipment: paid once, on top of the monthly costs.' },
+
+    // Investing
+    investStart: { label: 'Amount to invest now', type: 'money' },
+    investContribution: { label: 'Adding regularly (optional)', type: 'money', amountChips: [100, 250, 500], leftOverChip: true },
+    investFrequency: { label: 'How often', type: 'choice', options: [['weekly', 'Weekly'], ['fortnightly', 'Fortnightly'], ['monthly', 'Monthly']], default: 'monthly' },
+    investYears: { label: 'For how long', type: 'choice', options: [5, 10, 20, 30], unit: 'years', default: 10 },
+    investReturn: { label: 'Expected return per year', type: 'percent', percentChips: [4, 6, 8, 10], help: 'Not guaranteed. Returns rise and fall from year to year.' },
+    investFee: { label: 'Fees per year (optional)', type: 'percent', help: 'Taken off the return.' },
+    investInflation: { label: 'Inflation per year (optional)', type: 'percent', help: 'Shows what the total would buy in today’s money.' },
+
+    // Debt
+    debtBalance: { label: 'How much you owe', type: 'money' },
+    debtRate: { label: 'Interest per year', type: 'percent', help: 'Check your statement. Credit cards are often around 20%.' },
+    debtPayment: { label: 'You pay each month', type: 'money' },
+    debtExtra: { label: 'Extra each month (optional)', type: 'money', amountChips: [50, 100, 250], leftOverChip: true },
+
+    // Home loan
+    loanBalance: { label: 'Loan still owed', type: 'money' },
+    loanRate: { label: 'Interest rate per year', type: 'percent' },
+    loanPayment: { label: 'Your monthly repayment', type: 'money', help: 'Don’t know it? Leave it blank and enter the years left.' },
+    loanYears: { label: 'Years left on the loan', type: 'count', placeholder: 'e.g. 25' },
+    loanExtra: { label: 'Extra each month', type: 'money', amountChips: [100, 250, 500, 1000], leftOverChip: true },
+    loanLump: { label: 'One-off extra payment (optional)', type: 'money' },
+
+    // Moving
+    moveCurrency: { label: 'Currency there', type: 'currency' },
+    moveIncome: { label: 'Money coming in each month there', type: 'money', currencyFrom: 'moveCurrency', help: 'Leave blank if it stays the same.' },
+    moveCosts: { label: 'Costs each month there', type: 'money', currencyFrom: 'moveCurrency', help: 'Rent, food, transport and everything else.' },
+    moveUpfront: { label: 'Moving costs up front', type: 'money', help: 'Flights, shipping, bond, visas, setting up.' },
+
+    // Comparing scenarios
+    compareA: { label: 'Compare', type: 'scenario', default: 'current' },
+    compareB: { label: 'With', type: 'scenario' },
   };
 
 
@@ -230,9 +280,16 @@
     const own = savedValue(key);
     if (own != null && own !== '') return own;
     const f = FIELDS[key];
-    if (f && f.source) return SOURCES[f.source]().value;
+    const src = sourceOf(key);
+    if (src) return SOURCES[src]().value;
     if (f && f.default != null) return f.default;
     return null;
+  }
+
+  /** The currency a money field is typed in: its own (e.g. the place you'd move to) or the income currency. */
+  function moneyCode(key) {
+    const f = FIELDS[key];
+    return (f && f.currencyFrom && value(f.currencyFrom)) || code();
   }
 
   function setValue(key, v) {
@@ -243,7 +300,7 @@
     }
     store.values = store.values || {};
     if (v == null || v === '') delete store.values[key];
-    else store.values[key] = { v, c: FIELDS[key].type === 'money' ? code() : undefined };
+    else store.values[key] = { v, c: FIELDS[key].type === 'money' ? moneyCode(key) : undefined };
     saveStore();
   }
 
@@ -251,8 +308,8 @@
   // Formatting
   // ---------------------------------------------------------------------------
 
-  function money(n) {
-    const meta = getCurrencyMeta(code());
+  function money(n, cur = code()) {
+    const meta = getCurrencyMeta(cur);
     const abs = Math.abs(n);
     const digits = abs >= 100 || abs === 0 ? 0 : meta.decimals;
     const gap = /[A-Za-z]$/.test(meta.symbol) ? ' ' : '';
@@ -260,6 +317,14 @@
     return `${n < 0 ? '−' : ''}${meta.symbol}${gap}${abs.toLocaleString('en-US', { minimumFractionDigits: digits, maximumFractionDigits: digits })}`;
   }
   const pct = (x) => `${Math.round(x * 100)}%`;
+  /** "3 years 6 months", "8 months", "1 year". */
+  const yearsMonths = (m) => {
+    const y = Math.floor(m / 12);
+    const r = m % 12;
+    const ys = y ? `${y} year${y === 1 ? '' : 's'}` : '';
+    const ms = r ? `${r} month${r === 1 ? '' : 's'}` : '';
+    return [ys, ms].filter(Boolean).join(' ') || '0 months';
+  };
   const months = (m) => (m === Infinity ? 'indefinitely' : `${m} month${m === 1 ? '' : 's'}`);
   // Words are English, so dates are too (a Vietnamese phone shouldn't get “tháng 1 năm 2027” mid-sentence).
   const monthYear = (d) => d.toLocaleDateString('en-GB', { month: 'long', year: 'numeric' });
@@ -449,7 +514,8 @@
       ['Money going out', known ? money(r.expenses) : '—'],
       ['Money still coming in', known ? money(r.income) : '—'],
       [known && r.burn < 0 ? 'Extra each month' : 'Gap each month', known ? money(Math.abs(r.burn)) : '—'],
-      [`Cost of ${n || '—'} months`, known ? money(r.cost) : '—'],
+      [`Cost of ${n || '—'} months`, known ? money(r.monthsCost != null ? r.monthsCost : r.cost) : '—'],
+      ...(known && r.oneOff ? [['One-off costs', money(r.oneOff)]] : []),
       ['Money you can access', money(funds)],
       [r.status === 'short' ? 'Still needed' : 'Left afterwards', known ? money(r.status === 'short' ? r.shortfall : r.leftAfter) : '—'],
     ];
@@ -465,20 +531,53 @@
     const b = budget();
     // What you can put aside each month today, to close any gap.
     const capacity = b.income > 0 && Number.isFinite(b.expenses) ? Math.max(0, b.income - b.expenses) : 0;
-    const A = J.breakScenario({ funds: f.total, expenses: spend, income, months: n, capacity });
-    const B = ess.count ? J.breakScenario({ funds: f.total, expenses: ess.total == null ? NaN : ess.total, income, months: n, capacity }) : { status: 'invalid' };
+    const oneOff = Number(value('breakOneOff')) || 0;
+    const essTotal = ess.count ? (ess.total == null ? NaN : ess.total) : null;
+    const A = J.breakScenario({ funds: f.total, expenses: spend, income, months: n, capacity, oneOff });
+    const B = essTotal != null ? J.breakScenario({ funds: f.total, expenses: essTotal, income, months: n, capacity, oneOff }) : { status: 'invalid' };
     const notes = scenarioNotes(ctx, A, B, (funds) => {
-      const o = J.breakScenario({ funds, expenses: spend, income, months: n, capacity });
+      const o = J.breakScenario({ funds, expenses: spend, income, months: n, capacity, oneOff });
       return o.status === 'affordable' ? `you’d have about ${money(o.leftAfter)} left on current spending` : o.status === 'short' ? `you’d be ${money(o.shortfall)} short on current spending` : null;
     });
     if (!capacity && (A.status === 'short' || B.status === 'short')) notes.push('Add your income to the budget to see how long it would take to save the gap.');
+
+    // What if it lasts longer: how long the money would really last.
+    const longest = J.runwayScenario({ funds: Math.max(0, f.total - oneOff), expenses: Number.isFinite(essTotal) && essTotal > 0 ? essTotal : spend, income });
+    if (longest.status === 'depleting' && longest.months > n) {
+      notes.push(`If it lasted longer, your money would run out after about ${approxMonths(longest.months)}${Number.isFinite(essTotal) && essTotal > 0 ? ', spending only on what you need' : ''}.`);
+    } else if (longest.status === 'surplus' || longest.status === 'flat') {
+      notes.push('The money still coming in covers what you need, so a longer break wouldn’t use up your savings.');
+    }
+
+    // 3, 6 and 12 months side by side.
+    const LENGTHS = [3, 6, 12];
+    const cell = (exp, m) => {
+      if (exp == null || !Number.isFinite(exp)) return ['—', '—'];
+      const r = J.breakScenario({ funds: f.total, expenses: exp, income, months: m, oneOff });
+      if (r.status === 'invalid') return ['—', '—'];
+      return [money(r.cost), r.status === 'short' ? `${money(r.shortfall)} short` : money(r.leftAfter)];
+    };
+    const ca = LENGTHS.map((m) => cell(spend, m));
+    const cb = LENGTHS.map((m) => cell(essTotal, m));
+    const table = {
+      head: ['', ...LENGTHS.map((m) => `${m} months`)],
+      rows: [
+        ['Keep spending as today', '', '', '', 'is-total'],
+        ['Cost', ...ca.map((c) => c[0]), 'is-sub'],
+        ['Left afterwards', ...ca.map((c) => c[1]), 'is-sub'],
+        ['Spend only on what I need', '', '', '', 'is-total'],
+        ['Cost', ...cb.map((c) => c[0]), 'is-sub'],
+        ['Left afterwards', ...cb.map((c) => c[1]), 'is-sub'],
+      ],
+    };
     return {
+      table,
       scenarios: [
         { title: 'Keep spending as I do today', ...describeBreak(A, 'current', f.total, p) },
         { title: 'Spend only on what I need', ...describeBreak(B, 'essentials', f.total, p) },
       ],
       notes,
-      figures: scenarioAssumptions(ctx, [['Length', months(n)], ['Money left over now', capacity ? `${money(capacity)} a month, from your budget` : 'Not known']]),
+      figures: scenarioAssumptions(ctx, [['Length', months(n)], ...(oneOff ? [['One-off costs', money(oneOff)]] : []), ['Money left over now', capacity ? `${money(capacity)} a month, from your budget` : 'Not known']]),
       behindTitle: 'How this is worked out',
       footnote: 'These are estimates from the figures you’ve entered. They assume your spending and money coming in stay the same.',
     };
@@ -622,8 +721,8 @@
       icon: 'hourglass',
       presets: {
         default: { q: 'How long could I manage without an income?', fields: ['savings', 'confirmedMoney', 'uncertainMoney', 'includeUncertain', 'incomeDuring', 'expenses', 'essentialsList'], twoScenarios: true },
-        timeoff: { q: 'Could I afford to take six months off?', fields: ['duration', 'savings', 'confirmedMoney', 'uncertainMoney', 'includeUncertain', 'incomeDuring', 'expenses', 'essentialsList'], defaults: { duration: 6 }, twoScenarios: 'break' },
-        leave: { q: 'How much should I save before leaving my job?', fields: ['duration', 'savings', 'confirmedMoney', 'uncertainMoney', 'includeUncertain', 'incomeDuring', 'expenses', 'essentialsList'], defaults: { duration: 6 }, twoScenarios: 'break' },
+        timeoff: { q: 'Could I afford to take six months off?', fields: ['duration', 'breakOneOff', 'savings', 'confirmedMoney', 'uncertainMoney', 'includeUncertain', 'incomeDuring', 'expenses', 'essentialsList'], defaults: { duration: 6 }, twoScenarios: 'break' },
+        leave: { q: 'How much should I save before leaving my job?', fields: ['duration', 'breakOneOff', 'savings', 'confirmedMoney', 'uncertainMoney', 'includeUncertain', 'incomeDuring', 'expenses', 'essentialsList'], defaults: { duration: 6 }, twoScenarios: 'break' },
         jobloss: { q: 'What would happen if I lost my job?', fields: ['savings', 'confirmedMoney', 'uncertainMoney', 'includeUncertain', 'incomeDuring', 'expenses', 'essentialsList'], twoScenarios: true },
       },
       answer(p, preset) {
@@ -634,7 +733,12 @@
     goal: {
       name: 'Savings goal',
       icon: 'target',
-      presets: { default: { q: 'How long will it take me to save for something?' } },
+      presets: {
+        default: { q: 'How long will it take me to save for something?' },
+        // On your current budget: what you save defaults to your money left over.
+        trip: { q: 'How long will it take to save for a trip?', fields: ['goalTarget', 'goalSaved', 'goalContribution', 'goalFrequency'], sources: { goalContribution: 'leftOver' }, mode: 'time', placeholder: 'A trip' },
+        deposit: { q: 'How much should I save each month for a home deposit?', fields: ['goalTarget', 'goalSaved', 'goalDeadline', 'goalFrequency', 'goalRate'], mode: 'amount', placeholder: 'your deposit' },
+      },
       fields: ['goalMode'],
       fieldsFor() {
         const mode = value('goalMode') || 'time';
@@ -642,14 +746,15 @@
         if (mode === 'projection') return ['goalMode', 'goalSaved', 'goalContribution', 'goalFrequency', 'goalDeadline', 'goalRate'];
         return ['goalMode', 'goalName', 'goalTarget', 'goalSaved', 'goalContribution', 'goalFrequency', 'goalRate'];
       },
-      answer() {
-        const mode = value('goalMode') || 'time';
+      answer(p, preset) {
+        const fixed = this.presets[p] || {};
+        const mode = fixed.mode || value('goalMode') || 'time';
         const freq = value('goalFrequency') || 'monthly';
         const each = { weekly: 'a week', fortnightly: 'a fortnight', monthly: 'a month' }[freq];
-        const rate = Number(value('goalRate')) || 0;
-        const name = String(value('goalName') || '').trim();
+        const rate = preset.fields.includes('goalRate') ? Number(value('goalRate')) || 0 : 0;
+        const name = fixed.placeholder ? '' : String(value('goalName') || '').trim();
         const target = value('goalTarget');
-        const what = name || (target ? money(target) : 'your goal');
+        const what = name || (fixed.placeholder && target ? `${money(target)} for ${fixed.placeholder.replace(/^A /, 'a ')}` : target ? money(target) : 'your goal');
         const meaning = rate > 0 ? ['Interest is an estimate at the rate you entered. Rates can change.'] : [];
         const next = { label: 'How much should I keep for emergencies?', href: '#tool/emergency' };
         const m = lastBudget && lastBudget.model;
@@ -689,6 +794,17 @@
         if (g.status === 'too-long') return { main: 'At this saving amount, it would take more than 100 years.', sub: 'You could save more each time, or set a smaller target.', state: 'warn', meaning, next };
         const fig = [['Still needed', money(g.gap)], ['Saving each month', money(g.monthly)], ['Time', months(g.months)]];
         if (g.interest > 0.5) fig.push(['Interest along the way', money(g.interest)]);
+        // On your current budget: how much of what's left over this uses, and the fastest you could get there.
+        if (leftOver > 0) {
+          const share = g.monthly / leftOver;
+          meaning.push(share > 1.005
+            ? `That’s more than your money left over (${money(leftOver)} a month).`
+            : `That uses ${pct(share)} of your money left over (${money(leftOver)} a month).`);
+          if (share < 0.995) {
+            const all = J.goalTime({ target, saved: value('goalSaved'), contribution: leftOver, annualRate: rate });
+            if (all.status === 'ok' && all.months < g.months) meaning.push(`Saving all of it, you could get there by ${monthYear(all.reachDate)}.`);
+          }
+        }
         return {
           main: `You could reach ${what} by ${monthYear(g.reachDate)}.`,
           sub: `That’s about ${months(g.months)}, saving ${money(value('goalContribution'))} ${each}.`,
@@ -705,9 +821,9 @@
       name: 'Change in income',
       icon: 'trending-down',
       presets: {
-        default: { q: 'What happens if I earn less?', fields: ['newIncome', 'income', 'expenses', 'savings'] },
-        less: { q: 'Could I afford to work less?', fields: ['newIncome', 'income', 'expenses', 'savings'], chips: [-20, -40, -50] },
-        career: { q: 'Could I afford to change careers?', fields: ['newIncome', 'transitionMonths', 'transitionIncome', 'oneOff', 'income', 'expenses', 'savings'], chips: [] },
+        default: { q: 'What happens if I earn less?', fields: ['newIncome', 'changeStart', 'income', 'expenses', 'savings'] },
+        less: { q: 'Could I afford to work less?', fields: ['newIncome', 'changeStart', 'income', 'expenses', 'savings'], chips: [-20, -40, -50] },
+        career: { q: 'Could I afford to change careers?', fields: ['newIncome', 'changeStart', 'transitionMonths', 'transitionIncome', 'oneOff', 'income', 'expenses', 'savings'], chips: [] },
       },
       answer(p) {
         const inc = value('income');
@@ -716,14 +832,27 @@
         if (!inc || !exp) return { empty: { title: 'No income or costs yet', text: 'Type them below, or fill in your budget.' } };
         if (next == null || next === '') return { empty: { title: p === 'career' ? 'What would the new role pay?' : 'What would you earn instead?', text: p === 'career' ? 'Enter the new monthly salary below.' : 'Enter it below, or tap a percentage.' }, noBudgetLink: true };
         const career = p === 'career';
+        const startMonths = value('changeStart') ? J.monthsUntil(value('changeStart')) : 0;
         const c = J.incomeChange({
-          income: inc, newIncome: next, expenses: exp, savings: value('savings'),
+          income: inc, newIncome: next, expenses: exp, savings: value('savings'), startMonths,
           transition: career ? { months: value('transitionMonths'), income: value('transitionIncome'), oneOff: value('oneOff') } : null,
         });
         const fig = [
           [`Now: ${money(inc)} − ${money(exp)} costs`, money(c.leftNow)],
           [`New: ${money(next)} − ${money(exp)} costs`, money(c.leftNew)],
         ];
+        // From a later date, savings keep building on today's income first.
+        const from = startMonths ? monthYear(J.addMonths(startMonths)) : null;
+        if (from) fig.push([`Savings by ${from}`, money(c.savingsAtChange)]);
+        const meaning = [];
+        if (from) meaning.push(`Until ${from} you keep saving on what you earn now, so you’d start with about ${money(c.savingsAtChange)}.`);
+        const planned = lastBudget && lastBudget.model && lastBudget.model.ok ? lastBudget.model.planned.total : 0;
+        if (planned > 0) {
+          meaning.push(c.leftNew >= planned - 0.5
+            ? `Your savings & goals plan of ${money(planned)} a month would still fit.`
+            : `Your savings & goals plan of ${money(planned)} a month wouldn’t fit. You’d have ${money(Math.max(0, c.leftNew))} a month for it.`);
+        }
+        const nextStep = c.short ? { label: 'How long would my savings last?', href: '#tool/runway' } : { label: 'How long will it take me to save for something?', href: '#tool/goal' };
         if (career && c.transitionCost != null) {
           const t = c.transitionMonths;
           const costFig = t ? [[`${t} months × ${money(Math.max(0, exp - (value('transitionIncome') || 0)))} shortfall`, money(c.transitionCost - (value('oneOff') || 0))]] : [];
@@ -735,21 +864,355 @@
             sub: (c.short ? `Then you’d be ${money(-c.leftNew)} short each month.` : `Then you’d have ${money(c.leftNew)} a month left.`) + ahead + cover,
             state: c.short || c.savingsAfterTransition < 0 ? 'warn' : 'good',
             figures: [...costFig, ...fig],
+            behindTitle: 'How we worked it out',
+            meaning,
+            next: nextStep,
           };
         }
         if (c.short) {
           return {
             main: `You’d be ${money(-c.leftNew)} short each month.`,
-            sub: c.savingsCoverMonths ? `Your savings would cover that for ${months(c.savingsCoverMonths)}.` : 'Add your savings below to see how long they’d last.',
+            sub: c.savingsCoverMonths ? `Your savings would cover that for ${months(c.savingsCoverMonths)}${from ? ` from ${from}` : ''}.` : 'Add your savings below to see how long they’d last.',
             state: 'bad',
             figures: fig,
+            behindTitle: 'How we worked it out',
+            meaning,
+            next: nextStep,
           };
         }
         return {
-          main: `You’d have ${money(c.leftNew)} left a month, down from ${money(c.leftNow)}.`,
-          sub: c.diffYearly < 0 ? `${money(-c.diffYearly)} less a year.` : `${money(c.diffYearly)} more a year.`,
+          main: `You’d have ${money(c.leftNew)} left a month, ${c.leftNew < c.leftNow ? 'down' : 'up'} from ${money(c.leftNow)}.`,
+          sub: (c.diffYearly < 0 ? `${money(-c.diffYearly)} less a year` : `${money(c.diffYearly)} more a year`) + (from ? `, from ${from}.` : '.'),
           state: c.leftNew > 0 ? 'good' : 'warn',
           figures: fig,
+          behindTitle: 'How we worked it out',
+          meaning,
+          next: nextStep,
+        };
+      },
+    },
+
+    invest: {
+      name: 'Investment growth',
+      icon: 'trending-up',
+      presets: { default: { q: 'How much could my investment grow?' } },
+      fields: ['investStart', 'investContribution', 'investFrequency', 'investYears', 'investReturn', 'investFee', 'investInflation'],
+      answer() {
+        const ret = value('investReturn');
+        const freq = value('investFrequency') || 'monthly';
+        const each = { weekly: 'a week', fortnightly: 'a fortnight', monthly: 'a month' }[freq];
+        if (!(value('investStart') > 0) && !(value('investContribution') > 0)) {
+          return { empty: { title: 'How much would you invest?', text: 'Enter an amount to invest now, or how much you’d add regularly.' }, noBudgetLink: true };
+        }
+        if (ret == null || ret === '') return { empty: { title: 'What return do you expect?', text: 'Enter a yearly return below, or tap one of the suggestions.' }, noBudgetLink: true };
+        const g = J.investProjection({ start: value('investStart'), contribution: value('investContribution'), frequency: freq, years: value('investYears') || 10, annualReturn: ret, annualFee: value('investFee'), inflation: value('investInflation') });
+        if (g.status !== 'ok') return { empty: { title: 'How much would you invest?', text: 'Enter an amount below.' }, noBudgetLink: true };
+        const yrs = `${g.years} years`;
+        const fee = Number(value('investFee')) || 0;
+        const infl = Number(value('investInflation')) || 0;
+        const fig = [];
+        if (g.start) fig.push(['Invested now', money(g.start)]);
+        if (g.monthly) fig.push([`Added over ${yrs}`, money(g.contributed - g.start)]);
+        if (g.start && g.monthly) fig.push(['Total you put in', money(g.contributed)]);
+        fig.push([`Growth at ${ret}%${fee ? ` less ${fee}% fees` : ''} a year`, money(g.growth)]);
+        fig.push(['Total after ' + yrs, money(g.balance)]);
+        if (infl) fig.push([`In today’s money (${infl}% inflation)`, money(g.real)]);
+        const meaning = [
+          `If returns averaged ${Math.max(0, ret - 2)}% instead, you’d have about ${money(g.lower)}. At ${ret + 2}%, about ${money(g.higher)}.`,
+          'Returns aren’t guaranteed. Some years can lose money, especially over short periods.',
+        ];
+        if (infl) meaning.splice(1, 0, `In today’s money, ${money(g.balance)} would buy about what ${money(g.real)} buys now.`);
+        const left = leftOverNow();
+        const tooMuch = left != null && g.monthly > left + 0.5;
+        return {
+          main: `In ${yrs} you could have about ${money(g.balance)}.`,
+          sub: tooMuch
+            ? `Adding ${money(value('investContribution'))} ${each} is more than your money left over (${money(Math.max(0, left))} a month).`
+            : `You’d put in ${money(g.contributed)}. Growth could add about ${money(g.growth)}.`,
+          state: tooMuch ? 'warn' : 'good',
+          figures: fig,
+          behindTitle: 'How we worked it out',
+          meaning,
+          chart: {
+            kind: 'stack',
+            title: 'Your investment, year by year',
+            labels: g.yearly.map((p) => `Yr ${p.year}`),
+            tipLabel: (i) => `After ${g.yearly[i].year} year${g.yearly[i].year === 1 ? '' : 's'}`,
+            series: [
+              { name: 'Money you put in', values: g.yearly.map((p) => p.contributed) },
+              { name: 'Growth', values: g.yearly.map((p) => Math.max(0, p.balance - p.contributed)) },
+            ],
+          },
+          footnote: 'An estimate, not financial advice. It assumes the same return every year, worked out monthly, with money added at the end of each period. Taxes aren’t included.',
+          next: { label: 'Do I have enough for emergencies first?', href: '#tool/emergency' },
+        };
+      },
+    },
+
+    debt: {
+      name: 'Pay off debt',
+      icon: 'credit-card',
+      presets: { default: { q: 'How long will it take to pay off my debt?' } },
+      fields: ['debtBalance', 'debtRate', 'debtPayment', 'debtExtra'],
+      answer() {
+        const balance = value('debtBalance');
+        const pay = value('debtPayment');
+        const extra = Number(value('debtExtra')) || 0;
+        const rate = Number(value('debtRate')) || 0;
+        if (!(balance > 0)) return { empty: { title: 'How much do you owe?', text: 'Enter the balance below. For several debts, add them together or check each one.' }, noBudgetLink: true };
+        if (!(pay > 0)) return { empty: { title: 'How much do you pay each month?', text: 'Enter your monthly repayment below.' }, noBudgetLink: true };
+        const now = J.payoff({ balance, annualRate: rate, payment: pay });
+        const next = { label: 'How much should I keep for emergencies?', href: '#tool/emergency' };
+        const meaning = [];
+        if (rate >= 10) meaning.push('With several debts, paying extra on the one with the highest interest first usually saves the most.');
+        meaning.push('Your repayments already count in your money going out, if they’re in your budget.');
+        if (now.status === 'never' && !extra) {
+          return {
+            main: `At ${money(pay)} a month, this debt would never be paid off.`,
+            sub: `Interest is about ${money(now.interestOnly)} a month, so you’d need to pay more than that to bring it down.`,
+            state: 'bad',
+            meaning,
+            next,
+          };
+        }
+        const card = (r, amount) => {
+          const ok = r.status === 'ok';
+          return {
+            status: r.status,
+            big: ok ? monthYear(r.endDate) : r.status === 'never' ? 'Never' : r.status === 'too-long' ? '100+ years' : '—',
+            sentence: ok
+              ? `Paying ${money(amount)} a month clears it in about ${yearsMonths(r.months)}.`
+              : r.status === 'never' ? `${money(amount)} a month doesn’t cover the interest of ${money(r.interestOnly)}.` : 'This would take more than 100 years.',
+            rows: [
+              ['Each month', money(amount)],
+              ['Time to pay off', ok ? yearsMonths(r.months) : '—'],
+              ['Interest you’d pay', ok ? money(r.totalInterest) : '—'],
+              ['Total you’d pay', ok ? money(r.totalPaid) : '—'],
+            ],
+          };
+        };
+        const balanceChart = (series) => {
+          const len = Math.max(...series.map((s) => s.r.yearly.length));
+          return {
+            kind: 'lines',
+            title: 'What you still owe',
+            labels: Array.from({ length: len + 1 }, (_, i) => `Yr ${i}`),
+            tipLabel: (i) => (i ? `After ${i} year${i === 1 ? '' : 's'}` : 'Today'),
+            series: series.map((s) => ({ name: s.name, values: [s.r.balance, ...Array.from({ length: len }, (_, i) => (s.r.yearly[i] ? s.r.yearly[i].balance : null))] })),
+          };
+        };
+        if (!extra) {
+          return {
+            main: `You could be debt-free by ${monthYear(now.endDate)}.`,
+            sub: `That’s about ${yearsMonths(now.months)}, paying ${money(now.totalInterest)} in interest. Add an extra amount below to see how much sooner.`,
+            state: 'good',
+            figures: [['Owed now', money(balance)], ['Interest per year', `${rate}%`], ['Each month', money(pay)], ['Time to pay off', yearsMonths(now.months)], ['Interest you’d pay', money(now.totalInterest)]],
+            behindTitle: 'How we worked it out',
+            chart: balanceChart([{ name: `Paying ${money(pay)}`, r: now }]),
+            meaning,
+            footnote: 'Interest is worked out monthly at the rate you entered, with the same repayment each month. Fees and rate changes aren’t included.',
+            next,
+          };
+        }
+        const more = J.payoff({ balance, annualRate: rate, payment: pay, extra });
+        const both = now.status === 'ok' && more.status === 'ok';
+        return {
+          main: both
+            ? `Adding ${money(extra)} a month gets you debt-free ${yearsMonths(now.months - more.months)} sooner and saves ${money(now.totalInterest - more.totalInterest)} in interest.`
+            : more.status === 'ok' ? `With ${money(extra)} extra a month, you could be debt-free by ${monthYear(more.endDate)}.` : `Even with ${money(extra)} extra, this debt wouldn’t be paid off.`,
+          state: more.status === 'ok' ? 'good' : 'bad',
+          scenarios: [
+            { title: `Paying ${money(pay)} a month`, ...card(now, pay) },
+            { title: `Paying ${money(pay + extra)} a month`, ...card(more, pay + extra) },
+          ],
+          chart: both ? balanceChart([{ name: `Paying ${money(pay)}`, r: now }, { name: `Paying ${money(pay + extra)}`, r: more }]) : null,
+          meaning,
+          footnote: 'Interest is worked out monthly at the rate you entered, with the same repayment each month. Fees and rate changes aren’t included.',
+          next,
+        };
+      },
+    },
+
+    loan: {
+      name: 'Home loan extra repayments',
+      icon: 'home',
+      presets: { default: { q: 'How much could I save by paying extra on my home loan?' } },
+      fields: ['loanBalance', 'loanRate', 'loanPayment', 'loanYears', 'loanExtra', 'loanLump'],
+      answer() {
+        const balance = value('loanBalance');
+        const rate = Number(value('loanRate')) || 0;
+        const extra = Number(value('loanExtra')) || 0;
+        const lump = Number(value('loanLump')) || 0;
+        if (!(balance > 0)) return { empty: { title: 'How much is left on your loan?', text: 'Enter the amount still owed below.' }, noBudgetLink: true };
+        if (!rate) return { empty: { title: 'What’s your interest rate?', text: 'Enter it below. It’s on your loan statement or app.' }, noBudgetLink: true };
+        const x = J.extraRepayment({ balance, annualRate: rate, payment: value('loanPayment'), years: value('loanYears'), extra, lumpSum: lump });
+        if (x.paymentFrom === 'none') return { empty: { title: 'What do you repay each month?', text: 'Enter your monthly repayment, or the years left on the loan.' }, noBudgetLink: true };
+        const pay = x.payment;
+        if (x.base.status === 'never') {
+          return { main: `At ${money(pay)} a month, the repayment doesn’t cover the interest (${money(x.base.interestOnly)} a month).`, sub: 'Check the repayment and rate, or enter the years left instead.', state: 'bad' };
+        }
+        const foot = 'Assumes the rate stays the same, with interest worked out monthly and monthly repayments. Your lender may work out interest daily or charge fees, so its figures can differ a little.';
+        const meaning = ['Some loans, especially fixed-rate ones, limit extra repayments or charge for them. Check with your lender first.'];
+        if (x.paymentFrom === 'years') meaning.push(`Your repayment is worked out as ${money(pay)} a month, from ${value('loanYears')} years left.`);
+        const card = (r, monthly) => ({
+          status: r.status,
+          big: r.status === 'ok' ? monthYear(r.endDate) : r.status === 'paid' ? 'Paid off' : '—',
+          sentence: r.status === 'ok' ? `Paid off in about ${yearsMonths(r.months)}.` : r.status === 'paid' ? 'The one-off payment clears the loan.' : '',
+          rows: [
+            ['Each month', money(monthly)],
+            ...(r.lumpSum ? [['One-off payment', money(r.lumpSum)]] : []),
+            ['Time left', r.status === 'ok' ? yearsMonths(r.months) : '—'],
+            ['Interest you’d pay', r.status === 'ok' || r.status === 'paid' ? money(r.totalInterest) : '—'],
+          ],
+        });
+        const chart = (series) => {
+          const len = Math.max(...series.map((s) => (s.r.yearly || []).length));
+          return {
+            kind: 'lines',
+            title: 'What you still owe',
+            labels: Array.from({ length: len + 1 }, (_, i) => `Yr ${i}`),
+            tipLabel: (i) => (i ? `After ${i} year${i === 1 ? '' : 's'}` : 'Today'),
+            series: series.map((s) => ({ name: s.name, values: [s.start, ...Array.from({ length: len }, (_, i) => ((s.r.yearly || [])[i] ? s.r.yearly[i].balance : null))] })),
+          };
+        };
+        if (!extra && !lump) {
+          return {
+            main: `You’re on track to pay off your loan by ${monthYear(x.base.endDate)}.`,
+            sub: `That’s about ${yearsMonths(x.base.months)} and ${money(x.base.totalInterest)} in interest. Add an extra amount below to see what you’d save.`,
+            state: 'good',
+            figures: [['Owed now', money(balance)], ['Rate', `${rate}% a year`], ['Each month', money(pay)], ['Time left', yearsMonths(x.base.months)], ['Interest still to pay', money(x.base.totalInterest)]],
+            behindTitle: 'How we worked it out',
+            chart: chart([{ name: 'As you pay now', r: x.base, start: balance }]),
+            meaning,
+            footnote: foot,
+          };
+        }
+        const how = [extra ? `${money(extra)} a month` : '', lump ? `a one-off ${money(lump)}` : ''].filter(Boolean).join(' and ');
+        const ok = x.monthsSaved != null;
+        const left = leftOverNow();
+        if (extra && left != null && extra > left + 0.5) meaning.unshift(`${money(extra)} a month is more than your money left over (${money(Math.max(0, left))} a month).`);
+        return {
+          main: ok ? `Paying ${how} extra could save about ${yearsMonths(x.monthsSaved)} and ${money(x.interestSaved)} in interest.` : `Paying ${how} extra.`,
+          state: ok ? 'good' : '',
+          scenarios: [
+            { title: 'As you pay now', ...card(x.base, pay) },
+            { title: `With ${how} extra`, ...card(x.withExtra, pay + extra) },
+          ],
+          chart: ok && x.withExtra.status === 'ok' ? chart([{ name: 'As you pay now', r: x.base, start: balance }, { name: 'With the extra', r: x.withExtra, start: balance - lump }]) : null,
+          meaning,
+          footnote: foot,
+        };
+      },
+    },
+
+    move: {
+      name: 'Moving somewhere new',
+      icon: 'plane',
+      presets: { default: { q: 'Could I afford to move somewhere new?' } },
+      fields: ['moveCurrency', 'moveCosts', 'moveIncome', 'moveUpfront', 'savings', 'income', 'expenses'],
+      answer() {
+        const inc = value('income');
+        const exp = value('expenses');
+        const there = value('moveCosts');
+        if (!there) return { empty: { title: 'What would it cost to live there?', text: 'Enter your monthly costs in the new place below.' }, noBudgetLink: true };
+        if (!exp) return { empty: { title: 'What do you spend now?', text: 'Type your monthly costs below, or fill in your budget.' } };
+        const newInc = value('moveIncome') || inc;
+        const m = J.moveCompare({ incomeNow: inc, costsNow: exp, incomeNew: newInc, costsNew: there, upfront: value('moveUpfront'), savings: value('savings') });
+        const cur = value('moveCurrency') || code();
+        const left = (x) => (x < 0 ? `${money(-x)} short` : money(x));
+        const rows = (now) => [
+          ['Money coming in', money(now ? inc : newInc)],
+          ['Money going out', money(now ? exp : there)],
+          ['Left over each month', left(now ? m.leftNow : m.leftNew)],
+          ...(now ? [] : [['Moving costs', money(m.upfront)]]),
+          ['Savings in 6 months', money(now ? m.after[0].stay : m.after[0].move)],
+          ['Savings in 12 months', money(now ? m.after[1].stay : m.after[1].move)],
+        ];
+        const meaning = [];
+        if (m.short > 0) meaning.push(`You’d need ${money(m.short)} more for the move${m.monthsToSaveUpfront ? `, about ${months(m.monthsToSaveUpfront)} of saving` : ''}.`);
+        if (m.paybackMonths) meaning.push(`The lower costs would make up for the move after about ${yearsMonths(m.paybackMonths)}.`);
+        const d12 = m.after[1].move - m.after[1].stay;
+        meaning.push(d12 >= 0 ? `After a year you’d have about ${money(d12)} more than if you stayed.` : `After a year you’d have about ${money(-d12)} less than if you stayed.`);
+        if (m.lastsMonths) meaning.push(`Spending more than comes in, your savings would last about ${approxMonths(m.lastsMonths)} there.`);
+        if (cur !== code()) meaning.push(`Converted from ${cur} at today’s rate. If the rate moves, so do these figures.`);
+        const main = m.leftNew < 0
+          ? `There, your costs would be ${money(-m.leftNew)} a month more than your money coming in.`
+          : `There, you’d have about ${money(m.leftNew)} left over each month, ${m.change >= 0 ? `${money(m.change)} more` : `${money(-m.change)} less`} than now.`;
+        return {
+          main,
+          state: m.leftNew < 0 || m.short > 0 ? 'warn' : 'good',
+          scenarios: [
+            { title: 'Stay', status: 'now', big: left(m.leftNow), sentence: 'Left over each month where you are.', rows: rows(true) },
+            { title: 'Move', status: m.leftNew < 0 ? 'short' : 'ok', big: left(m.leftNew), sentence: m.short > 0 ? `The move costs ${money(m.upfront)}, ${money(m.short)} more than your savings.` : `After the move, you’d have ${money(m.afterMove)} of savings left.`, rows: rows(false) },
+          ],
+          meaning: meaning.slice(0, 4),
+          footnote: 'Estimates from the figures you’ve entered, assuming they stay the same each month.',
+          next: { label: 'Compare two full budgets side by side', href: '#tool/compare' },
+        };
+      },
+    },
+
+    compare: {
+      name: 'Compare scenarios',
+      icon: 'columns',
+      presets: { default: { q: 'How do two of my budgets compare?' } },
+      fields: ['compareA', 'compareB'],
+      answer() {
+        const S = window.BudgetScenarios;
+        const list = S ? S.list() : [];
+        if (!list.length) {
+          return { empty: { title: 'No saved scenarios yet', text: 'Save your budget as a scenario, change it (a new city, a new job), and save it again. Then compare them here.' } };
+        }
+        const a = value('compareA') || 'current';
+        const b = value('compareB');
+        const nameOf = (id) => (id === 'current' ? 'My budget now' : (list.find((x) => x.id === id) || {}).name || 'Scenario');
+        if (!b) return { empty: { title: 'Choose a scenario to compare', text: 'Pick one below.' }, noBudgetLink: true };
+        const A = S.model(a, code());
+        const B = S.model(b, code());
+        if (!A || !B) return { empty: { title: 'Scenario not found', text: 'Choose another below.' }, noBudgetLink: true };
+        [A, B].forEach((x) => {
+          if (!x.ok) x.missingRates.forEach((c) => missingRates.add(c));
+          if (x.converted) convertedSomething = true;
+        });
+        if (!A.ok || !B.ok) return {};
+        const d = BudgetCore.compareModels(A, B);
+        const v = (x) => (x == null ? '—' : money(x));
+        const diff = (x) => (x == null ? '—' : x === 0 ? 'Same' : `${x > 0 ? '+' : '−'}${money(Math.abs(x))}`);
+        const row = (label, x, y, cls = '') => [label, v(x), v(y), diff(x == null || y == null ? null : y - x), cls];
+        const rows = [
+          row('Money coming in', A.moneyIn.total, B.moneyIn.total, 'is-total'),
+          row('Money going out', A.moneyOut.total, B.moneyOut.total, 'is-total'),
+          row('Costs you must pay', A.moneyOut.essential, B.moneyOut.essential, 'is-sub'),
+          row('Other spending', A.moneyOut.other, B.moneyOut.other, 'is-sub'),
+          row('Money left over', A.leftOver, B.leftOver, 'is-result'),
+          row('Left over in a year', A.leftOverYear, B.leftOverYear),
+          row('Money you can access', A.savings.accessible, B.savings.accessible),
+        ];
+        const nA = nameOf(a);
+        const nB = nameOf(b);
+        let main;
+        if (d.leftOver == null) main = `${nB} costs ${diff(d.moneyOut)} a month compared with ${nA}.`;
+        else if (Math.abs(d.leftOver) < 0.5) main = `${nB} and ${nA} leave you about the same each month.`;
+        else main = `${nB} leaves you ${money(Math.abs(d.leftOver))} ${d.leftOver > 0 ? 'more' : 'less'} each month than ${nA}.`;
+        const meaning = [];
+        if (d.leftOverYear) meaning.push(`That’s ${money(Math.abs(d.leftOverYear))} ${d.leftOverYear > 0 ? 'more' : 'less'} a year.`);
+        if (A.converted || B.converted) meaning.push(`Both are shown in ${code()}, converted at today’s rates.`);
+        // Biggest cost differences, by name.
+        const byName = (m) => m.moneyOut.items.reduce((o, i) => ((o[i.name] = (o[i.name] || 0) + i.monthly), o), {});
+        const ca = byName(A);
+        const cb = byName(B);
+        const changes = [...new Set([...Object.keys(ca), ...Object.keys(cb)])]
+          .map((k) => ({ k, d: (cb[k] || 0) - (ca[k] || 0) }))
+          .filter((x) => Math.abs(x.d) >= 1)
+          .sort((x, y) => Math.abs(y.d) - Math.abs(x.d))
+          .slice(0, 3);
+        if (changes.length) meaning.push(`Biggest differences: ${changes.map((c) => `${c.k} ${c.d > 0 ? '+' : '−'}${money(Math.abs(c.d))}`).join(', ')}.`);
+        return {
+          main,
+          state: d.leftOver == null ? '' : d.leftOver >= 0 ? 'good' : 'warn',
+          table: { head: ['', nA, nB, 'Difference'], rows },
+          behindTitle: 'Side by side, each month',
+          meaning,
         };
       },
     },
@@ -777,8 +1240,8 @@
     const f = FIELDS[key];
     if (key === 'savings') return { text: f.help };
     const own = savedValue(key);
-    if (f.source) {
-      const src = SOURCES[f.source]();
+    if (sourceOf(key)) {
+      const src = SOURCES[sourceOf(key)]();
       const hasOwn = own != null && own !== '';
       if (hasOwn && src.value > 0 && Math.abs(own - src.value) > 0.5) {
         return { text: 'Your figure ·', reset: `Use ${src.label} (${money(src.value)})` };
@@ -786,6 +1249,9 @@
       if (!hasOwn && src.value > 0) return { text: `From ${src.label}.` };
       if (!hasOwn && f.help) return { text: f.help };
       return null;
+    }
+    if (f.currencyFrom && value(f.currencyFrom) && value(f.currencyFrom) !== code()) {
+      return { text: `In ${value(f.currencyFrom)}.${f.help ? ` ${f.help}` : ''}` };
     }
     return f.help ? { text: f.help } : null;
   }
@@ -985,6 +1451,35 @@
     label.htmlFor = id;
     wrap.appendChild(label);
 
+    if (f.type === 'currency' || f.type === 'scenario') {
+      const sel = document.createElement('select');
+      sel.id = id;
+      sel.className = 'cell-input tool-select';
+      if (f.type === 'currency') {
+        if (typeof populateCurrencySelectOptions === 'function') populateCurrencySelectOptions(sel, value(key) || code());
+        sel.value = value(key) || code();
+      } else {
+        const opts = [['current', 'My budget now'], ...(window.BudgetScenarios ? window.BudgetScenarios.list().map((x) => [x.id, x.name]) : [])];
+        if (!value(key)) opts.unshift(['', 'Choose a saved scenario']);
+        opts.forEach(([v, t]) => {
+          const o = document.createElement('option');
+          o.value = v;
+          o.textContent = t;
+          sel.appendChild(o);
+        });
+        sel.value = value(key) || '';
+      }
+      sel.addEventListener('change', () => {
+        setValue(key, sel.value || null);
+        render(true);
+      });
+      wrap.appendChild(sel);
+      const hint = el('p', 'tool-field-hint');
+      hint.dataset.hintFor = key;
+      wrap.appendChild(hint);
+      return wrap;
+    }
+
     if (f.type === 'choice') {
       label.removeAttribute('for');
       const group = el('div', 'segmented tool-choice');
@@ -1019,11 +1514,15 @@
     input.className = 'cell-input';
     input.dataset.key = key;
     if (f.type === 'money') {
-      const sym = el('span', 'money-symbol', getCurrencyMeta(code()).symbol);
+      const cur = moneyCode(key);
+      const sym = el('span', 'money-symbol', getCurrencyMeta(cur).symbol);
       sym.setAttribute('aria-hidden', 'true');
+      if (f.currencyFrom) sym.dataset.currencyFrom = f.currencyFrom;
       inputWrap.appendChild(sym);
-      attachAmountInputFormatting(input, () => getCurrencyMeta(code()).decimals);
-      const v = value(key);
+      attachAmountInputFormatting(input, () => getCurrencyMeta(moneyCode(key)).decimals);
+      // Shown as typed, in its own currency (worked out in the income currency).
+      const raw = f.currencyFrom && store.values && store.values[key];
+      const v = raw ? raw.v : value(key);
       input.placeholder = '0';
       if (v != null && v !== '' && Number.isFinite(Number(v)) && Number(v) !== 0) {
         input.value = String(Math.round(Number(v) * 100) / 100);
@@ -1063,6 +1562,26 @@
     });
     inputWrap.appendChild(input);
     wrap.appendChild(inputWrap);
+
+    // Quick amounts: "+A$250", "My money left over (A$2,027)", "8%".
+    if (f.amountChips || f.percentChips || f.leftOverChip) {
+      const row = el('div', 'tool-chips');
+      const chip = (text, v, aria) => {
+        const b = el('button', 'tool-chip', text);
+        b.type = 'button';
+        if (aria) b.setAttribute('aria-label', aria);
+        b.addEventListener('click', () => {
+          setValue(key, v);
+          render(true);
+        });
+        row.appendChild(b);
+      };
+      (f.amountChips || []).forEach((c) => chip(money(c).replace(/\.00$/, ''), c));
+      (f.percentChips || []).forEach((c) => chip(`${c}%`, c));
+      const left = leftOverNow();
+      if (f.leftOverChip && left > 0) chip(`My money left over (${money(left)})`, Math.round(left * 100) / 100);
+      if (row.children.length) wrap.appendChild(row);
+    }
 
     const chips = key === 'newIncome' ? (preset.chips || f.chips) : null;
     if (chips && chips.length) {
@@ -1134,7 +1653,8 @@
     sc.innerHTML = '';
     sc.hidden = !a.scenarios;
     if (a.scenarios) {
-      $('toolAnswer').hidden = true;
+      // A headline can sit above the scenarios (e.g. "saves 6 years").
+      if (!a.main) $('toolAnswer').hidden = true;
       a.scenarios.forEach((x, i) => {
         const card = el('section', `tool-scenario tool-scenario--${i === 0 ? 'current' : 'essentials'}`);
         card.dataset.status = x.status;
@@ -1207,6 +1727,8 @@
       tiles.appendChild(d);
     });
 
+    renderChart(a.empty ? null : a.chart);
+
     // Behind the answer
     const fig = $('toolFigures');
     fig.innerHTML = '';
@@ -1230,13 +1752,17 @@
       });
       thead.appendChild(hr);
       const tbody = el('tbody');
-      a.table.rows.forEach(([label, mo, yr, cls]) => {
-        const tr = el('tr', cls || '');
-        const th = el('th', '', label);
+      // Each row: label, one cell per column, then an optional class.
+      const cols = a.table.head.length;
+      a.table.rows.forEach((r) => {
+        const tr = el('tr', r[cols] || '');
+        const th = el('th', '', r[0]);
         th.scope = 'row';
-        tr.append(th, el('td', 'num', mo), el('td', 'num', yr));
+        tr.appendChild(th);
+        r.slice(1, cols).forEach((c) => tr.appendChild(el('td', 'num', c)));
         tbody.appendChild(tr);
       });
+      table.classList.toggle('tool-table--wide', cols > 3);
       table.append(thead, tbody);
     }
 
@@ -1283,6 +1809,134 @@
     $('toolColumns').classList.toggle('is-single', $('toolBehind').hidden || $('toolAdjust').hidden);
     renderHints();
     updateEssentialsSummary();
+  }
+
+  // ---------------------------------------------------------------------------
+  // Chart: stacked bars (investing) or lines (a loan balance), one column per
+  // year, with a tooltip on hover/focus. Two series at most, always with a
+  // legend; the same figures are in the table beside it.
+  // ---------------------------------------------------------------------------
+
+  const SVG = 'http://www.w3.org/2000/svg';
+  function svg(tag, attrs) {
+    const n = document.createElementNS(SVG, tag);
+    Object.entries(attrs || {}).forEach(([k, v]) => n.setAttribute(k, v));
+    return n;
+  }
+  const shortMoney = (n) => {
+    const sym = getCurrencyMeta(code()).symbol;
+    const a = Math.abs(n);
+    const t = a >= 1e9 ? `${+(a / 1e9).toFixed(1)}b` : a >= 1e6 ? `${+(a / 1e6).toFixed(1)}m` : a >= 1e3 ? `${Math.round(a / 1e3)}k` : `${Math.round(a)}`;
+    return `${sym}${/[A-Za-z]$/.test(sym) ? ' ' : ''}${t}`;
+  };
+
+  function renderChart(c) {
+    const wrap = $('toolChart');
+    if (!wrap) return;
+    wrap.innerHTML = '';
+    wrap.hidden = !c;
+    if (!c) return;
+    wrap.appendChild(el('h3', 'tool-chart-title', c.title));
+    const legend = el('ul', 'tool-chart-legend');
+    c.series.forEach((s, i) => {
+      const li = el('li', `is-s${i}`);
+      li.appendChild(el('span', 'tool-chart-key'));
+      li.appendChild(document.createTextNode(s.name));
+      legend.appendChild(li);
+    });
+    wrap.appendChild(legend);
+
+    // Drawn at the size it's shown, so text stays 12px on any screen.
+    const W = Math.max(280, Math.round(wrap.clientWidth - 40) || 640);
+    const H = W < 500 ? 200 : 260;
+    const pad = { l: 52, r: 8, t: 8, b: 26 };
+    const n = c.labels.length;
+    const stacked = c.kind === 'stack';
+    const totals = c.labels.map((_, i) => (stacked ? c.series.reduce((a, s) => a + s.values[i], 0) : Math.max(...c.series.map((s) => s.values[i] || 0))));
+    const max = Math.max(1, ...totals);
+    const y = (v) => pad.t + (H - pad.t - pad.b) * (1 - v / max);
+    const colW = (W - pad.l - pad.r) / n;
+    const x = (i) => pad.l + colW * i + colW / 2;
+    const chart = svg('svg', { viewBox: `0 0 ${W} ${H}`, class: 'tool-chart-svg', role: 'img', 'aria-label': c.title });
+
+    // Gridlines and y labels (recessive).
+    [0, 0.5, 1].forEach((f) => {
+      const v = max * f;
+      chart.appendChild(svg('line', { x1: pad.l, x2: W - pad.r, y1: y(v), y2: y(v), class: 'tool-chart-grid' }));
+      const t = svg('text', { x: pad.l - 6, y: y(v) + 4, class: 'tool-chart-axis', 'text-anchor': 'end' });
+      t.textContent = shortMoney(v);
+      chart.appendChild(t);
+    });
+    // X labels: thin out so they never collide.
+    const every = Math.ceil(n / Math.max(2, Math.floor((W - pad.l) / 52)));
+    c.labels.forEach((l, i) => {
+      if (i % every && i !== n - 1) return;
+      if (i !== n - 1 && i % every === 0 && n - 1 - i < every && i) return; // too close to the last label
+      const t = svg('text', { x: x(i), y: H - 8, class: 'tool-chart-axis', 'text-anchor': 'middle' });
+      t.textContent = l;
+      chart.appendChild(t);
+    });
+
+    if (stacked) {
+      const bw = Math.max(2, Math.min(28, colW - 4));
+      c.labels.forEach((_, i) => {
+        let base = 0;
+        c.series.forEach((s, si) => {
+          const v = Math.max(0, s.values[i]);
+          if (v <= 0) return;
+          const top = y(base + v);
+          const h = Math.max(0, y(base) - top - (base > 0 ? 2 : 0)); // 2px gap between segments
+          chart.appendChild(svg('rect', { x: x(i) - bw / 2, y: top, width: bw, height: h, rx: si === c.series.length - 1 ? 3 : 0, class: `tool-chart-bar is-s${si}` }));
+          base += v;
+        });
+      });
+    } else {
+      c.series.forEach((s, si) => {
+        const pts = s.values.map((v, i) => (v == null ? null : `${x(i)},${y(v)}`)).filter(Boolean);
+        chart.appendChild(svg('polyline', { points: pts.join(' '), class: `tool-chart-line is-s${si}` }));
+      });
+    }
+    chart.appendChild(svg('line', { x1: pad.l, x2: W - pad.r, y1: y(0), y2: y(0), class: 'tool-chart-base' }));
+
+    // Hover/focus: one hit column per year, bigger than the marks.
+    const tip = el('div', 'tool-chart-tip');
+    tip.hidden = true;
+    const cross = svg('line', { y1: pad.t, y2: H - pad.b, class: 'tool-chart-cross', visibility: 'hidden' });
+    chart.appendChild(cross);
+    c.labels.forEach((l, i) => {
+      const hit = svg('rect', { x: pad.l + colW * i, y: pad.t, width: colW, height: H - pad.t - pad.b, class: 'tool-chart-hit', tabindex: i % every === 0 || i === n - 1 ? '0' : '-1' });
+      const showTip = () => {
+        tip.innerHTML = '';
+        tip.appendChild(el('strong', '', c.tipLabel ? c.tipLabel(i) : l));
+        c.series.forEach((s, si) => {
+          if (s.values[i] == null) return;
+          const row = el('span', `is-s${si}`);
+          row.appendChild(el('span', 'tool-chart-key'));
+          row.appendChild(document.createTextNode(`${s.name}: ${money(s.values[i])}`));
+          tip.appendChild(row);
+        });
+        if (stacked) tip.appendChild(el('span', 'tool-chart-tip-total', `Total: ${money(totals[i])}`));
+        tip.hidden = false;
+        const left = (x(i) / W) * 100;
+        tip.style.left = `${Math.min(70, Math.max(0, left - 15))}%`;
+        cross.setAttribute('x1', x(i));
+        cross.setAttribute('x2', x(i));
+        cross.setAttribute('visibility', 'visible');
+      };
+      const hide = () => {
+        tip.hidden = true;
+        cross.setAttribute('visibility', 'hidden');
+      };
+      hit.addEventListener('pointerenter', showTip);
+      hit.addEventListener('focus', showTip);
+      hit.addEventListener('pointerleave', hide);
+      hit.addEventListener('blur', hide);
+      chart.appendChild(hit);
+    });
+    const box = el('div', 'tool-chart-box');
+    box.appendChild(chart);
+    box.appendChild(tip);
+    wrap.appendChild(box);
   }
 
   /** "Could I afford to take six months off?" follows the length chosen. */
@@ -1336,7 +1990,7 @@
     }
     // Keep money symbols in step with the income currency.
     document.querySelectorAll('#toolFields .money-symbol').forEach((s) => {
-      s.textContent = getCurrencyMeta(code()).symbol;
+      s.textContent = getCurrencyMeta((s.dataset.currencyFrom && value(s.dataset.currencyFrom)) || code()).symbol;
     });
     renderAnswer();
   }
@@ -1414,6 +2068,17 @@
       render(false);
     });
   }
+
+  let lastWidth = window.innerWidth;
+  let resizeTimer = null;
+  window.addEventListener('resize', () => {
+    clearTimeout(resizeTimer);
+    resizeTimer = setTimeout(() => {
+      if (!current || window.innerWidth === lastWidth || $('toolChart').hidden) return;
+      lastWidth = window.innerWidth;
+      render(false);
+    }, 150);
+  });
 
   window.BudgetTools = { show, TOOLS, FIELDS, value };
   if (typeof recomputeAll === 'function') recomputeAll();

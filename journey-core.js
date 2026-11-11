@@ -268,11 +268,16 @@
    * Compare what's left each month now vs on a new income, with an optional
    * transition (months at reduced income plus one-off costs) before it starts.
    */
-  function incomeChange({ income, newIncome, expenses, savings = 0, transition = null }) {
+  function incomeChange({ income, newIncome, expenses, savings = 0, transition = null, startMonths = 0 }) {
     const exp = num(expenses);
     const now = num(income) - exp;
     const next = num(newIncome) - exp;
+    // A later start: savings keep growing (or shrinking) on today's income until then.
+    const wait = Math.round(num(startMonths));
+    savings = Math.max(0, num(savings) + now * wait);
     const out = {
+      startMonths: wait,
+      savingsAtChange: savings,
       leftNow: now,
       leftNew: next,
       diffMonthly: next - now,
@@ -434,16 +439,19 @@
    * @returns {{status:'invalid'|'covered-by-income'|'affordable'|'short', ...}}
    *   capacity = what can be saved per month today (for "months to close the gap")
    */
-  function breakScenario({ funds, expenses, income = 0, months, capacity = 0 }) {
+  function breakScenario({ funds, expenses, income = 0, months, capacity = 0, oneOff = 0 }) {
     const f = Number(funds);
     const e = Number(expenses);
     const i = Number(income) || 0;
     const m = Number(months);
+    const once = num(oneOff);
     if (![f, e, i, m].every(Number.isFinite) || e < 0 || f < 0 || i < 0 || m <= 0) return { status: 'invalid' };
     const burn = Math.round((e - i) * 100) / 100;
-    const base = { funds: f, expenses: e, income: i, burn, months: m };
-    if (burn <= 0) return { ...base, status: 'covered-by-income', cost: 0, leftAfter: f };
-    const cost = burn * m;
+    const base = { funds: f, expenses: e, income: i, burn, months: m, oneOff: once };
+    if (burn <= 0 && !once) return { ...base, status: 'covered-by-income', cost: 0, monthsCost: 0, leftAfter: f };
+    const monthsCost = Math.max(0, burn) * m;
+    base.monthsCost = monthsCost;
+    const cost = monthsCost + once;
     const left = f - cost;
     if (left >= 0) return { ...base, status: 'affordable', cost, leftAfter: left };
     const shortfall = -left;
@@ -455,6 +463,159 @@
       shortfall,
       monthsToSave: Number.isFinite(cap) && cap > 0 ? Math.ceil(shortfall / cap) : null,
     };
+  }
+
+  // ---------------------------------------------------------------------------
+  // Projections: loans and debts, investing, moving
+  // ---------------------------------------------------------------------------
+
+  const LOAN_MAX_MONTHS = 1200; // 100 years: beyond this, "not paid off"
+
+  /** Monthly repayment that clears `balance` in `months` (interest monthly, yearly % / 12). */
+  function loanPayment(balance, annualRate, months) {
+    const b = num(balance);
+    const n = Math.round(num(months));
+    if (!b || !n) return 0;
+    const r = num(annualRate) / 100 / 12;
+    if (!r) return b / n;
+    return (b * r) / (1 - Math.pow(1 + r, -n));
+  }
+
+  /**
+   * Pay a debt down month by month: interest is added, then the repayment
+   * (plus any extra) comes off. A one-off lump sum comes off at the start.
+   * @returns {{status:'invalid'|'paid'|'never'|'too-long'|'ok', ...}}
+   *   never: the repayment doesn't cover the interest, so the balance never falls
+   */
+  function payoff({ balance, annualRate = 0, payment = 0, extra = 0, lumpSum = 0, today = new Date() }) {
+    const start = num(balance);
+    if (!start) return { status: 'invalid' };
+    const b0 = start - num(lumpSum);
+    if (b0 <= 0.005) return { status: 'paid', balance: start, lumpSum: num(lumpSum), months: 0, totalInterest: 0, totalPaid: start };
+    const r = num(annualRate) / 100 / 12;
+    const pay = num(payment) + num(extra);
+    const firstInterest = b0 * r;
+    if (pay <= firstInterest + 0.005) {
+      return { status: pay > 0 ? 'never' : 'no-payment', balance: b0, payment: pay, interestOnly: firstInterest };
+    }
+    let b = b0;
+    let months = 0;
+    let interest = 0;
+    let lastPayment = pay;
+    const yearly = [];
+    while (b > 0.005 && months < LOAN_MAX_MONTHS) {
+      const i = b * r;
+      interest += i;
+      b += i;
+      months++;
+      if (b <= pay) {
+        lastPayment = b;
+        b = 0;
+      } else b -= pay;
+      if (months % 12 === 0 || b === 0) yearly.push({ month: months, balance: b, interest });
+    }
+    if (b > 0.005) return { status: 'too-long', balance: b0, payment: pay };
+    return {
+      status: 'ok',
+      balance: b0,
+      lumpSum: num(lumpSum),
+      payment: pay,
+      months,
+      lastPayment,
+      totalInterest: interest,
+      totalPaid: b0 + interest + num(lumpSum),
+      endDate: addMonths(months, today),
+      yearly,
+    };
+  }
+
+  /**
+   * Extra repayments on a loan: the same loan paid as now, and with the extra.
+   * The repayment is the one given, or worked out from the years left.
+   */
+  function extraRepayment({ balance, annualRate = 0, payment, years, extra = 0, lumpSum = 0, today = new Date() }) {
+    const given = num(payment);
+    const pay = given || (num(years) ? loanPayment(balance, annualRate, num(years) * 12) : 0);
+    const base = payoff({ balance, annualRate, payment: pay, today });
+    const withExtra = payoff({ balance, annualRate, payment: pay, extra, lumpSum, today });
+    const out = { payment: pay, paymentFrom: given ? 'given' : pay ? 'years' : 'none', extra: num(extra), lumpSum: num(lumpSum), base, withExtra };
+    if (base.status === 'ok' && (withExtra.status === 'ok' || withExtra.status === 'paid')) {
+      out.monthsSaved = base.months - withExtra.months;
+      out.interestSaved = Math.max(0, base.totalInterest - withExtra.totalInterest);
+    }
+    return out;
+  }
+
+  /**
+   * Investing: a starting amount plus regular contributions, growing at a
+   * yearly return (compounded monthly, so 8% a year is 8% over 12 months).
+   * Fees come off the return. Inflation gives the total in today's money.
+   * Contributions go in at the end of each period.
+   */
+  function investProjection({ start = 0, contribution = 0, frequency = 'monthly', years, annualReturn = 0, annualFee = 0, inflation = 0 }) {
+    const y = num(years);
+    if (!y) return { status: 'no-years' };
+    const s = num(start);
+    const per = monthlyEquivalent(contribution, frequency);
+    if (!s && !per) return { status: 'nothing' };
+    const n = Math.round(y * 12);
+    const grow = (ret) => {
+      const net = Math.max(-99, (Number(ret) || 0) - num(annualFee));
+      const r = Math.pow(1 + net / 100, 1 / 12) - 1;
+      let b = s;
+      const yearly = [];
+      for (let m = 1; m <= n; m++) {
+        b = b * (1 + r) + per;
+        if (m % 12 === 0 || m === n) yearly.push({ year: Math.ceil(m / 12), contributed: s + per * m, balance: b });
+      }
+      return { balance: b, yearly };
+    };
+    const main = grow(annualReturn);
+    const contributed = s + per * n;
+    const real = main.balance / Math.pow(1 + num(inflation) / 100, y);
+    return {
+      status: 'ok',
+      years: y,
+      months: n,
+      start: s,
+      monthly: per,
+      contributed,
+      growth: main.balance - contributed,
+      balance: main.balance,
+      real,
+      yearly: main.yearly,
+      lower: grow((Number(annualReturn) || 0) - 2).balance,
+      higher: grow((Number(annualReturn) || 0) + 2).balance,
+    };
+  }
+
+  /**
+   * Moving somewhere new: what's left each month there vs here, what the move
+   * costs up front, and where your savings would be after 6 and 12 months.
+   */
+  function moveCompare({ incomeNow, costsNow, incomeNew, costsNew, upfront = 0, savings = 0 }) {
+    const leftNow = signed(incomeNow) - signed(costsNow);
+    const leftNew = signed(incomeNew) - signed(costsNew);
+    const up = num(upfront);
+    const have = num(savings);
+    const afterMove = have - up;
+    const short = Math.max(0, up - have);
+    const out = {
+      leftNow,
+      leftNew,
+      change: leftNew - leftNow,
+      upfront: up,
+      savings: have,
+      afterMove,
+      short,
+      monthsToSaveUpfront: short > 0 && leftNow > 0 ? Math.ceil(short / leftNow) : null,
+      after: [6, 12].map((m) => ({ months: m, move: afterMove + leftNew * m, stay: have + leftNow * m })),
+    };
+    // Pays for itself: months until moving is ahead of staying.
+    out.paybackMonths = out.change > 0 && up > 0 ? Math.ceil(up / out.change) : null;
+    // Spending more than comes in after the move: how long savings would last.
+    out.lastsMonths = leftNew < 0 && afterMove > 0 ? afterMove / -leftNew : null;
+    return out;
   }
 
   // ---------------------------------------------------------------------------
@@ -473,6 +634,7 @@
 
   return {
     breakScenario, ratesAge, STALE_RATE_DAYS,
+    loanPayment, payoff, extraRepayment, investProjection, moveCompare,
     goalTime, goalContribution, goalProjection, monthlyEquivalent, growBalance,
     breakdown, capacity, snapshot, emergencyFund, runway, savingsGoal, incomeChange, monthsUntil, addMonths, dateAfter,
     suggestEssential, essentialKey, essentials, availableFunds, runwayScenario, sumInCurrency, MAX_MONTHS,

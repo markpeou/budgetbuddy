@@ -2091,3 +2091,172 @@ body:not([data-view='app']) {
     padding: 16px;
   }
 }
+
+/* ------------------------------------------------------------------ */
+/* Phase 3: projections — chart, selects, wide tables                  */
+/* ------------------------------------------------------------------ */
+
+.tool-chart {
+  margin-top: 16px;
+  padding: 18px 20px 14px;
+  border: 1px solid var(--color-line);
+  border-radius: 16px;
+  background: var(--card-bg);
+}
+
+.tool-chart[hidden] {
+  display: none;
+}
+
+.tool-chart-title {
+  margin: 0;
+  font-size: 15px;
+  font-weight: 700;
+}
+
+.tool-chart-legend {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 16px;
+  margin: 6px 0 8px;
+  padding: 0;
+  list-style: none;
+  font-size: 13px;
+  color: var(--muted);
+}
+
+.tool-chart-legend li,
+.tool-chart-tip span {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.tool-chart-key {
+  width: 10px;
+  height: 10px;
+  border-radius: 3px;
+  background: var(--chart-1);
+  flex: none;
+}
+
+.is-s1 > .tool-chart-key {
+  background: var(--chart-2);
+}
+
+.tool-chart-box {
+  position: relative;
+}
+
+.tool-chart-svg {
+  display: block;
+  width: 100%;
+  height: auto;
+  overflow: visible;
+}
+
+.tool-chart-grid {
+  stroke: var(--color-line);
+  stroke-width: 1;
+}
+
+.tool-chart-base {
+  stroke: #9ca3af;
+  stroke-width: 1;
+}
+
+.tool-chart-axis {
+  fill: var(--muted);
+  font-size: 12px;
+  font-family: var(--font-family);
+}
+
+.tool-chart-bar.is-s0 {
+  fill: var(--chart-1);
+}
+
+.tool-chart-bar.is-s1 {
+  fill: var(--chart-2);
+}
+
+.tool-chart-line {
+  fill: none;
+  stroke: var(--chart-1);
+  stroke-width: 2.5;
+  stroke-linejoin: round;
+  stroke-linecap: round;
+}
+
+.tool-chart-line.is-s1 {
+  stroke: var(--chart-2);
+}
+
+.tool-chart-cross {
+  stroke: var(--muted);
+  stroke-width: 1;
+  stroke-dasharray: 3 3;
+  pointer-events: none;
+}
+
+.tool-chart-hit {
+  fill: transparent;
+  cursor: crosshair;
+  outline: none;
+}
+
+.tool-chart-hit:focus-visible {
+  fill: rgba(123, 20, 239, 0.06);
+}
+
+.tool-chart-tip {
+  position: absolute;
+  top: 0;
+  display: grid;
+  gap: 3px;
+  min-width: 170px;
+  padding: 8px 10px;
+  border: 1px solid var(--color-line);
+  border-radius: var(--radius-md);
+  background: var(--card-bg);
+  box-shadow: 0 6px 18px rgba(26, 26, 46, 0.12);
+  font-size: 13px;
+  color: var(--text);
+  font-variant-numeric: tabular-nums;
+  pointer-events: none;
+}
+
+.tool-chart-tip[hidden] {
+  display: none;
+}
+
+.tool-chart-tip-total {
+  font-weight: 700;
+}
+
+.tool-select {
+  width: 100%;
+  min-height: 44px;
+  padding: 0 10px;
+}
+
+.tool-table--wide thead th:not(:first-child) {
+  text-align: right;
+  text-transform: none;
+  letter-spacing: 0;
+}
+
+@media (max-width: 600px) {
+  .tool-chart {
+    padding: 14px 12px 10px;
+  }
+  .tool-table--wide {
+    font-size: 14px;
+  }
+  .tool-table--wide .num {
+    padding-left: 8px;
+    white-space: normal;
+  }
+  .tool-table--wide thead th {
+    font-size: 11px;
+  }
+}

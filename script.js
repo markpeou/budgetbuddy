@@ -2617,3 +2617,20 @@ function getBudgetModel() {
   return Core && Core.budgetModel ? Core.budgetModel(collectScenarioData(), { rates: vndRatesCache }) : null;
 }
 window.getBudgetModel = getBudgetModel;
+
+/** Saved scenarios, for comparing two side by side in one currency. */
+window.BudgetScenarios = {
+  list() {
+    return getScenariosStore().scenarios.map((s) => ({ id: s.id, name: s.name, savedAt: s.savedAt }));
+  },
+  /** The model of a saved scenario, or of the budget on screen ('current'). */
+  model(id, currency) {
+    if (!Core || !Core.budgetModel) return null;
+    if (id === 'current') return Core.budgetModel(collectScenarioData(), { rates: vndRatesCache, currency });
+    const sc = getScenariosStore().scenarios.find((s) => s.id === id);
+    if (!sc || !sc.data) return null;
+    // Migration covers the core budget; other income, savings and essentials ride alongside.
+    const d = { ...Core.migrateScenarioData(sc.data), essentials: sc.data.essentials, otherIncome: sc.data.otherIncome || [], savings: sc.data.savings || null };
+    return Core.budgetModel(d, { rates: vndRatesCache, currency });
+  },
+};

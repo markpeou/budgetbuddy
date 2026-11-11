@@ -15,6 +15,9 @@ Parked ideas, roughly in priority order. Move an item into work by opening an is
 ## Journey calculators
 
 - Savings goal: several goals at once, each with its own target.
+- Pay off debt: several debts at once, highest interest first vs smallest first.
+- Home loan: offset account, fortnightly repayments, rate change scenarios.
+- Investment growth: tax, and a deliberately bumpy-returns view.
 
 ## Summary (after OCR is reliable)
 
@@ -25,9 +28,8 @@ Parked ideas, roughly in priority order. Move an item into work by opening an is
 ## Multi-country
 
 - **Savings held in more than one currency** (e.g. AUD at home, VND where you live), converted for runway and emergency fund.
-- **"Could I afford to move to another country?"** — compare cost of living and runway between two places. The original reason Budget Buddy was built.
+- ~~"Could I afford to move to another country?"~~ Done in Phase 3 (Moving somewhere new + Compare scenarios). Next: runway in the new place, and costs in two currencies at once.
 
 ## Other ideas
 
 - Currency exposure view (how much of spending sits in each currency).
-- Scenario comparison side by side.
